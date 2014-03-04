@@ -192,6 +192,9 @@ sub output_caps_markers {
     $output .= ".$region" if $region;
 
     open my $caps_fh, ">", $output;
-    say $caps_fh "PLACEHOLDER";
+    for my $chr ( sort keys $caps ) {
+        say $caps_fh join "\t", $chr, $_, $$caps{$chr}{$_}
+            for sort { $a <=> $b } keys $$caps{$chr};
+    }
     close $caps_fh;
 }
