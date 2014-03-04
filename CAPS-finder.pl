@@ -9,13 +9,11 @@ use warnings;
 use autodie;
 use feature 'say';
 use Getopt::Long;
-use Data::Printer;
 
 my $current_version = '0.0.0';
 
-# my @snp_files = @ARGV;
-my @snp_files = 'sample-files/polyDB.A05.nr';
 my ( $id1, $id2, $fa, $region, $outdir ) = cli_options($current_version);
+my @snp_files = @ARGV;
 my $enzymes = restriction_enzymes();
 my $sites   = restriction_sites($enzymes);
 my $snps    = import_snps( \@snp_files, $id1, $id2, $region );
@@ -24,18 +22,9 @@ output_caps_markers( $caps, $outdir, $id1, $id2, $region );
 
 sub cli_options {
     my $current_version = shift;
-
-    # temporary defaults
-    my $id1    = 'R500';
-    my $id2    = 'IMB211';
-    my $fa     = 'sample-files/B.rapa_genome_sequence_0830.fa';
-    my $region = 'A05:8000001-9000000';
-    my $help;
-    my $version;
-
-    # my $region = '';
-    my $outdir = './';
-    # my ( $id1, $id2, $fa, $help, $version );
+    my ( $id1, $id2, $fa, $help, $version );
+    my $region  = '';
+    my $outdir  = '.';
     my $options = GetOptions(
         "id1=s"    => \$id1,
         "id2=s"    => \$id2,
