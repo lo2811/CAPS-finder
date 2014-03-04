@@ -14,13 +14,15 @@ my @snp_files = 'sample-files/polyDB.A05.nr';
 # my @snp_files = @ARGV;
 
 my $fa = 'sample-files/B.rapa_genome_sequence_0830.fa';
+my $region = 'A05:8000001-9000000';
+# my $region = '';
 
 my $id1 = 'R500';
 my $id2 = 'IMB211';
 
 my $enzymes = restriction_enzymes();
 my $sites   = restriction_sites($enzymes);
-my $snps    = import_snps( \@snp_files, $id1, $id2 );
+my $snps    = import_snps( \@snp_files, $id1, $id2, $region );
 
 for my $chr ( sort keys $snps ) {
     my $chr_seq = get_chr_seq( $fa, $chr );
@@ -54,7 +56,9 @@ sub restriction_sites {
 }
 
 sub import_snps {
-    my ( $snp_files, $id1, $id2 ) = @_;
+    my ( $snp_files, $id1, $id2, $region ) = @_;
+    my ( $roi_chr, $roi_start, $roi_end )
+        = $region =~ /^([^:]+):?(\d*)-?(\d*)/;
 
     my %snps;
     for my $file (@$snp_files) {
@@ -63,6 +67,10 @@ sub import_snps {
         while (<$snp_fh>) {
             next if /(?:INS)|(?:del)/;
             my ( $chr, $pos, $ref, $alt, $alt_geno ) = split /\t/;
+            next if defined $roi_chr && $chr ne $roi_chr;
+            next if defined $roi_start && $pos < $roi_start;
+            next if defined $roi_end   && $pos > $roi_end;
+
             my $ref_geno = $alt_geno eq $id2 ? $id1 : $id2;
             $snps{$chr}{$pos}{$ref_geno} = $ref;
             $snps{$chr}{$pos}{$alt_geno} = $alt;
