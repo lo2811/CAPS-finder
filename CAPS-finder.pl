@@ -2,7 +2,7 @@
 # Mike Covington
 # created: 2014-03-03
 #
-# Description:
+# Description: Find sites of potential CAPS markers.
 #
 use strict;
 use warnings;
@@ -49,7 +49,7 @@ USAGE
   $0 --id1 GENOTYPE --id2 GENOTYPE --fa FASTA [--region CHR:POS-POS] SNPFILE(S)
 
 DESCRIPTION
-  Finds potential sites for CAPS markers.
+  Find sites of potential CAPS markers.
 
 OPTIONS
   -h, --help                  Print this help message
