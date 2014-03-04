@@ -14,7 +14,7 @@ use File::Path 'make_path';
 # TODO: Find non-palindromic sites
 # TODO: Find sites for enzymes with ambiguous bases
 
-my $current_version = '0.1.0';
+my $current_version = '0.2.0';
 
 my ( $id1, $id2, $fa, $region, $outdir ) = cli_options($current_version);
 my @snp_files = @ARGV;
