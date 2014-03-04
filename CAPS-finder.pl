@@ -23,6 +23,7 @@ my $sites   = restriction_sites($enzymes);
 my $snps    = import_snps( \@snp_files, $id1, $id2 );
 
 for my $chr ( sort keys $snps ) {
+    my $chr_seq = get_chr_seq( $fa, $chr );
     for my $pos ( sort { $a <=> $b } keys $$snps{$chr} ) {
         my $seqs = get_sequences( $fa, $chr, $pos, $snps, $id1, $id2 );
         my $matches = marker_enzymes( $sites, $seqs );
@@ -70,6 +71,16 @@ sub import_snps {
     }
 
     return \%snps;
+}
+
+sub get_chr_seq {
+    my ( $fa, $chr ) = @_;
+
+    my $cmd = "samtools faidx $fa $chr";
+    my ( $fa_id, @seq ) = `$cmd`;
+    chomp @seq;
+
+    return join "", @seq;
 }
 
 sub get_sequences {
