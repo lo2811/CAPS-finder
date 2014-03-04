@@ -3,6 +3,7 @@
 # created: 2014-03-04
 #
 # Description: Parse strider format restriction enzyme files for CAPS-finder.pl
+#              [Source of strider files: ftp://ftp.neb.com/pub/rebase/]
 #
 use strict;
 use warnings;
