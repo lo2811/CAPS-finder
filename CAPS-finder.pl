@@ -9,6 +9,7 @@ use warnings;
 use autodie;
 use feature 'say';
 use Getopt::Long;
+use File::Path 'make_path';
 
 # TODO: Add more restriction enzymes
 # TODO: Find non-palindromic sites
@@ -22,6 +23,7 @@ my $enzymes = restriction_enzymes();
 my $sites   = restriction_sites($enzymes);
 my $snps    = import_snps( \@snp_files, $id1, $id2, $region );
 my $caps    = find_caps_markers( $snps, $sites, $id1, $id2, $fa );
+make_path($outdir);
 output_caps_markers( $caps, $outdir, $id1, $id2, $region );
 exit;
 
