@@ -139,6 +139,7 @@ sub get_chr_seq {
     my ( $fa_id, @seq ) = `$cmd`;
     chomp @seq;
 
+    die "Problem getting sequences for $chr.\n" unless @seq;
     return join "", @seq;
 }
 
