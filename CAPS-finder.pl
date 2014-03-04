@@ -10,6 +10,10 @@ use autodie;
 use feature 'say';
 use Getopt::Long;
 
+# TODO: Add more restriction enzymes
+# TODO: Find non-palindromic sites
+# TODO: Find sites for enzymes with ambiguous bases
+
 my $current_version = '0.1.0';
 
 my ( $id1, $id2, $fa, $region, $outdir ) = cli_options($current_version);
