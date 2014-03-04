@@ -25,7 +25,7 @@ my $snps    = import_snps( \@snp_files, $id1, $id2 );
 for my $chr ( sort keys $snps ) {
     my $chr_seq = get_chr_seq( $fa, $chr );
     for my $pos ( sort { $a <=> $b } keys $$snps{$chr} ) {
-        my $seqs = get_sequences( $fa, $chr, $pos, $snps, $id1, $id2 );
+        my $seqs = get_sequences( \$chr_seq, $chr, $pos, $snps, $id1, $id2 );
         my $matches = marker_enzymes( $sites, $seqs );
         say join "\t", $chr, $pos, join ",", @$matches if @$matches;
     }
@@ -84,16 +84,13 @@ sub get_chr_seq {
 }
 
 sub get_sequences {
-    my ( $fa, $chr, $pos, $snps, $id1, $id2 ) = @_;
+    my ( $chr_seq, $chr, $pos, $snps, $id1, $id2 ) = @_;
 
-    my $flank = 10;
-    my $start = $pos - $flank;
-    my $end   = $pos + $flank;
+    my $flank  = 10;
+    my $offset = $pos - ( $flank + 1 );
+    my $length = 2 * $flank + 1;
 
-    my $cmd = "samtools faidx $fa $chr:$start-$end";
-    my ( $fa_id, $seq ) = `$cmd`;
-    chomp $seq;
-
+    my $seq = substr $$chr_seq, $offset, $length;
     my $pre_snp = substr $seq, 0, $flank;
     my $post_snp = substr $seq, -$flank;
 
