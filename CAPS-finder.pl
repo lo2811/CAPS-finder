@@ -125,14 +125,18 @@ sub import_snps {
 
 sub find_caps_markers {
     my ( $snps, $sites, $id1, $id2, $fa ) = @_;
+
+    my %caps;
     for my $chr ( sort keys $snps ) {
         my $chr_seq = get_chr_seq( $fa, $chr );
         for my $pos ( sort { $a <=> $b } keys $$snps{$chr} ) {
             my $seqs = get_sequences( \$chr_seq, $chr, $pos, $snps, $id1, $id2 );
             my $matches = marker_enzymes( $sites, $seqs );
-            say join "\t", $chr, $pos, join ",", @$matches if @$matches;
+            $caps{$chr}{$pos} = join ",", @$matches if @$matches;
         }
     }
+
+    return \%caps;
 }
 
 sub get_chr_seq {
