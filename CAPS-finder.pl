@@ -2,15 +2,19 @@
 # Mike Covington
 # created: 2014-03-03
 #
-# Description:
+# Description: Find sites of potential CAPS markers.
 #
 use strict;
 use warnings;
 use autodie;
 use feature 'say';
 use Getopt::Long;
+use File::Path 'make_path';
 
-my $current_version = '0.1.0';
+# TODO: Find non-palindromic sites
+# TODO: Find sites for enzymes with ambiguous bases
+
+my $current_version = '0.2.0';
 
 my ( $id1, $id2, $fa, $region, $outdir ) = cli_options($current_version);
 my @snp_files = @ARGV;
@@ -18,7 +22,9 @@ my $enzymes = restriction_enzymes();
 my $sites   = restriction_sites($enzymes);
 my $snps    = import_snps( \@snp_files, $id1, $id2, $region );
 my $caps    = find_caps_markers( $snps, $sites, $id1, $id2, $fa );
+make_path($outdir);
 output_caps_markers( $caps, $outdir, $id1, $id2, $region );
+exit;
 
 sub cli_options {
     my $current_version = shift;
@@ -49,7 +55,7 @@ USAGE
   $0 --id1 GENOTYPE --id2 GENOTYPE --fa FASTA [--region CHR:POS-POS] SNPFILE(S)
 
 DESCRIPTION
-  Finds potential sites for CAPS markers.
+  Find sites of potential CAPS markers.
 
 OPTIONS
   -h, --help                  Print this help message
@@ -65,20 +71,19 @@ EOF
 }
 
 sub restriction_enzymes {
-    return {
-        BamHI   => 'G/GATCC',
-        DpnI    => 'GA/TC',
-        DpnII   => '/GATC',
-        EcoRI   => 'G/AATTC',
-        EcoRV   => 'GAT/ATC',
-        HindIII => 'A/AGCTT',
-    };
+    my %enzymes;
+    while (<DATA>) {
+        chomp;
+        my ( $name, $site ) = split /,/;
+        $enzymes{$name} = $site;
+    }
+    return \%enzymes;
 }
 
 sub restriction_sites {
     my $enzymes = shift;
     my %sites;
-    for ( keys $enzymes ) {
+    for ( sort keys $enzymes ) {
         my $site = $$enzymes{$_};
         $site =~ s|/||;
         push @{ $sites{$site} }, $_;
@@ -198,3 +203,117 @@ sub output_caps_markers {
     }
     close $caps_fh;
 }
+
+__DATA__
+AatII,gacgt/c
+AbsI,cc/tcgagg
+Acc65I,g/gtacc
+AclI,aa/cgtt
+AfeI,agc/gct
+AflII,c/ttaag
+AgeI,a/ccggt
+AluI,ag/ct
+AoxI,/ggcc
+ApaI,gggcc/c
+ApaLI,g/tgcac
+AscI,gg/cgcgcc
+AseI,at/taat
+Asi256I,g/atc
+AsiSI,gcgat/cgc
+AvrII,c/ctagg
+BamHI,g/gatcc
+BclI,t/gatca
+BfaI,c/tag
+BglII,a/gatct
+BmtI,gctag/c
+BsiWI,c/gtacg
+BspEI,t/ccgga
+BspHI,t/catga
+BsrGI,t/gtaca
+BssHII,g/cgcgc
+BstBI,tt/cgaa
+BstKTI,gat/c
+BstUI,cg/cg
+BstZ17I,gta/tac
+ChaI,gatc/
+ClaI,at/cgat
+CviAII,c/atg
+CviQI,g/tac
+DpnI,ga/tc
+DraI,ttt/aaa
+EagI,c/ggccg
+EcoRI,g/aattc
+EcoRV,gat/atc
+Eco53kI,gag/ctc
+EsaBC3I,tc/ga
+FatI,/catg
+FseI,ggccgg/cc
+FspI,tgc/gca
+GlaI,gc/gc
+HaeIII,gg/cc
+HhaI,gcg/c
+HinP1I,g/cgc
+HindIII,a/agctt
+HpaI,gtt/aac
+HpaII,c/cgg
+HpyCH4IV,a/cgt
+HpyCH4V,tg/ca
+KasI,g/gcgcc
+KpnI,ggtac/c
+KroI,g/ccggc
+MauBI,cg/cgcgcg
+MboI,/gatc
+McaTI,gcgc/gc
+MfeI,c/aattg
+MluI,a/cgcgt
+MluCI,/aatt
+MreI,cg/ccggcg
+MscI,tgg/cca
+MseI,t/taa
+NaeI,gcc/ggc
+NarI,gg/cgcc
+NcoI,c/catgg
+NdeI,ca/tatg
+NgoMIV,g/ccggc
+NheI,g/ctagc
+NlaIII,catg/
+NotI,gc/ggccgc
+NruI,tcg/cga
+NsiI,atgca/t
+PabI,gta/c
+PacI,ttaat/taa
+PciI,a/catgt
+PluTI,ggcgc/c
+PmeI,gttt/aaac
+PmlI,cac/gtg
+Ppu10I,a/tgcat
+PsiI,tta/taa
+PspOMI,g/ggccc
+PstI,ctgca/g
+PvuI,cgat/cg
+PvuII,cag/ctg
+RsaI,gt/ac
+SacI,gagct/c
+SacII,ccgc/gg
+SalI,g/tcgac
+SbfI,cctgca/gg
+ScaI,agt/act
+SciI,ctc/gag
+SelI,/cgcg
+SfoI,ggc/gcc
+SgrDI,cg/tcgacg
+SmaI,ccc/ggg
+SnaBI,tac/gta
+SpeI,a/ctagt
+SphI,gcatg/c
+SrfI,gccc/gggc
+SspI,aat/att
+Sth302II,cc/gg
+StuI,agg/cct
+SwaI,attt/aaat
+TaiI,acgt/
+TaqI,t/cga
+XbaI,t/ctaga
+XhoI,c/tcgag
+XmaI,c/ccggg
+ZraI,gac/gtc
