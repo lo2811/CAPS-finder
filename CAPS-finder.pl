@@ -161,6 +161,7 @@ sub get_sequences {
     my $length = 2 * $flank + 1;
 
     my $seq = substr $$chr_seq, $offset, $length;
+    $seq =~ tr/A-Z/a-z/;
     my $pre_snp = substr $seq, 0, $flank;
     my $post_snp = substr $seq, -$flank;
 
