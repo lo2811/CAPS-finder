@@ -8,17 +8,24 @@ use strict;
 use warnings;
 use autodie;
 use feature 'say';
+use Getopt::Long;
 use Data::Printer;
 
-my @snp_files = 'sample-files/polyDB.A05.nr';
-# my @snp_files = @ARGV;
-
-my $fa = 'sample-files/B.rapa_genome_sequence_0830.fa';
+my $id1    = 'R500';
+my $id2    = 'IMB211';
+my $fa     = 'sample-files/B.rapa_genome_sequence_0830.fa';
 my $region = 'A05:8000001-9000000';
 # my $region = '';
 
-my $id1 = 'R500';
-my $id2 = 'IMB211';
+my $options = GetOptions(
+    "id1=s"    => \$id1,
+    "id2=s"    => \$id2,
+    "fa=s"     => \$fa,
+    "region=s" => \$region,
+);
+
+my @snp_files = 'sample-files/polyDB.A05.nr';
+# my @snp_files = @ARGV;
 
 my $enzymes = restriction_enzymes();
 my $sites   = restriction_sites($enzymes);
