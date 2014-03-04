@@ -83,7 +83,7 @@ sub restriction_enzymes {
 sub restriction_sites {
     my $enzymes = shift;
     my %sites;
-    for ( keys $enzymes ) {
+    for ( sort keys $enzymes ) {
         my $site = $$enzymes{$_};
         $site =~ s|/||;
         push @{ $sites{$site} }, $_;
