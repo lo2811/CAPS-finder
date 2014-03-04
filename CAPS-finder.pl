@@ -19,7 +19,8 @@ my ( $id1, $id2, $fa, $region, $outdir ) = cli_options($current_version);
 my $enzymes = restriction_enzymes();
 my $sites   = restriction_sites($enzymes);
 my $snps    = import_snps( \@snp_files, $id1, $id2, $region );
-find_caps_markers( $snps, $sites, $id1, $id2, $fa );
+my $caps    = find_caps_markers( $snps, $sites, $id1, $id2, $fa );
+output_caps_markers( $caps, $outdir, $id1, $id2, $region );
 
 sub cli_options {
     my $current_version = shift;
@@ -177,4 +178,16 @@ sub marker_enzymes {
     push @matching_enzymes, @{$$sites{$_}} for @matching_sites;
 
     return \@matching_enzymes;
+}
+
+sub output_caps_markers {
+    my ( $caps, $outdir, $id1, $id2, $region ) = @_;
+
+    $region =~ s/:/_/;
+    my $output = "$outdir/CAPS.$id1-$id2";
+    $output .= ".$region" if $region;
+
+    open my $caps_fh, ">", $output;
+    say $caps_fh "PLACEHOLDER";
+    close $caps_fh;
 }
