@@ -23,6 +23,7 @@ my $sites   = restriction_sites($enzymes);
 my $snps    = import_snps( \@snp_files, $id1, $id2, $region );
 my $caps    = find_caps_markers( $snps, $sites, $id1, $id2, $fa );
 output_caps_markers( $caps, $outdir, $id1, $id2, $region );
+exit;
 
 sub cli_options {
     my $current_version = shift;
@@ -69,14 +70,13 @@ EOF
 }
 
 sub restriction_enzymes {
-    return {
-        BamHI   => 'G/GATCC',
-        DpnI    => 'GA/TC',
-        DpnII   => '/GATC',
-        EcoRI   => 'G/AATTC',
-        EcoRV   => 'GAT/ATC',
-        HindIII => 'A/AGCTT',
-    };
+    my %enzymes;
+    while (<DATA>) {
+        chomp;
+        my ( $name, $site ) = split /,/;
+        $enzymes{$name} = $site;
+    }
+    return \%enzymes;
 }
 
 sub restriction_sites {
@@ -202,3 +202,11 @@ sub output_caps_markers {
     }
     close $caps_fh;
 }
+
+__DATA__
+BamHI,G/GATCC
+DpnI,GA/TC
+DpnII,/GATC
+EcoRI,G/AATTC
+EcoRV,GAT/ATC
+HindIII,A/AGCTT
