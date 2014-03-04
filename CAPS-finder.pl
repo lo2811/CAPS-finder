@@ -20,6 +20,8 @@ my $seqs    = get_sequences( $id1, $id2 );
 sub restriction_enzymes {
     return {
         BamHI   => 'G/GATCC',
+        DpnI    => 'GA/TC',
+        DpnII   => '/GATC',
         EcoRI   => 'G/AATTC',
         EcoRV   => 'GAT/ATC',
         HindIII => 'A/AGCTT',
@@ -28,8 +30,14 @@ sub restriction_enzymes {
 
 sub restriction_sites {
     my $enzymes = shift;
-    my %sites = map { s|/||; $_ => 1 } values $enzymes;
-    return [ keys %sites ];
+    my %sites;
+    for ( keys $enzymes ) {
+        my $site = $$enzymes{$_};
+        $site =~ s|/||;
+        push @{ $sites{$site} }, $_;
+    }
+    return \%sites;
+}
 
 sub get_sequences {
     my ( $id1, $id2 ) = @_;
