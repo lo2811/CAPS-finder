@@ -11,29 +11,67 @@ use feature 'say';
 use Getopt::Long;
 use Data::Printer;
 
+my $current_version = '0.0.0';
+
 # my @snp_files = @ARGV;
 my @snp_files = 'sample-files/polyDB.A05.nr';
-my ( $id1, $id2, $fa, $region ) = cli_options();
+my ( $id1, $id2, $fa, $region, $outdir ) = cli_options($current_version);
 my $enzymes = restriction_enzymes();
 my $sites   = restriction_sites($enzymes);
 my $snps    = import_snps( \@snp_files, $id1, $id2, $region );
 find_caps_markers( $snps, $sites, $id1, $id2, $fa );
 
 sub cli_options {
+    my $current_version = shift;
+
+    # temporary defaults
     my $id1    = 'R500';
     my $id2    = 'IMB211';
     my $fa     = 'sample-files/B.rapa_genome_sequence_0830.fa';
     my $region = 'A05:8000001-9000000';
-    # my $region = '';
+    my $help;
+    my $version;
 
+    # my $region = '';
+    my $outdir = './';
+    # my ( $id1, $id2, $fa, $help, $version );
     my $options = GetOptions(
         "id1=s"    => \$id1,
         "id2=s"    => \$id2,
         "fa=s"     => \$fa,
         "region=s" => \$region,
+        "outdir=s" => \$outdir,
+        "help"     => \$help,
+        "version"  => \$version,
     );
 
-    return $id1, $id2, $fa, $region;
+    die "$0 $current_version\n" if $version;
+    usage() if $help;
+    usage() unless defined $id1 && defined $id2 && defined $fa;
+
+    return $id1, $id2, $fa, $region, $outdir;
+}
+
+sub usage {
+    die <<EOF;
+
+USAGE
+  $0 --id1 GENOTYPE --id2 GENOTYPE --fa FASTA [--region CHR:POS-POS] SNPFILE(S)
+
+DESCRIPTION
+  Finds potential sites for CAPS markers.
+
+OPTIONS
+  -h, --help                  Print this help message
+  -v, --version               Print version number
+  --id1          GENOTYPE     ID for genotype 1
+  --id1          GENOTYPE     ID for genotype 2
+  -f, --fa       FASTA        Path to FASTA reference file
+  -r, --region   CHR:POS-POS  Chromosome and/or region of interest
+  -o, --outdir   DIR          Directory to save output file
+                               (Default is current directory)
+
+EOF
 }
 
 sub restriction_enzymes {
