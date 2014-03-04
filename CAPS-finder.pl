@@ -11,26 +11,30 @@ use feature 'say';
 use Getopt::Long;
 use Data::Printer;
 
-my $id1    = 'R500';
-my $id2    = 'IMB211';
-my $fa     = 'sample-files/B.rapa_genome_sequence_0830.fa';
-my $region = 'A05:8000001-9000000';
-# my $region = '';
-
-my $options = GetOptions(
-    "id1=s"    => \$id1,
-    "id2=s"    => \$id2,
-    "fa=s"     => \$fa,
-    "region=s" => \$region,
-);
-
-my @snp_files = 'sample-files/polyDB.A05.nr';
 # my @snp_files = @ARGV;
-
+my @snp_files = 'sample-files/polyDB.A05.nr';
+my ( $id1, $id2, $fa, $region ) = cli_options();
 my $enzymes = restriction_enzymes();
 my $sites   = restriction_sites($enzymes);
 my $snps    = import_snps( \@snp_files, $id1, $id2, $region );
 find_caps_markers( $snps, $sites, $id1, $id2, $fa );
+
+sub cli_options {
+    my $id1    = 'R500';
+    my $id2    = 'IMB211';
+    my $fa     = 'sample-files/B.rapa_genome_sequence_0830.fa';
+    my $region = 'A05:8000001-9000000';
+    # my $region = '';
+
+    my $options = GetOptions(
+        "id1=s"    => \$id1,
+        "id2=s"    => \$id2,
+        "fa=s"     => \$fa,
+        "region=s" => \$region,
+    );
+
+    return $id1, $id2, $fa, $region;
+}
 
 sub restriction_enzymes {
     return {
