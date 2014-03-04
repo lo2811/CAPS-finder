@@ -13,16 +13,22 @@ use Data::Printer;
 my @snp_files = 'sample-files/polyDB.A05.nr';
 # my @snp_files = @ARGV;
 
+my $fa = 'sample-files/B.rapa_genome_sequence_0830.fa';
+
 my $id1 = 'R500';
 my $id2 = 'IMB211';
 
 my $enzymes = restriction_enzymes();
 my $sites   = restriction_sites($enzymes);
 my $snps    = import_snps( \@snp_files, $id1, $id2 );
-my $seqs    = get_sequences( $id1, $id2 );
-my $matches = marker_enzymes( $sites, $seqs );
 
-say $_ for @$matches;
+for my $chr ( sort keys $snps ) {
+    for my $pos ( sort { $a <=> $b } keys $$snps{$chr} ) {
+        my $seqs = get_sequences( $fa, $chr, $pos, $snps, $id1, $id2 );
+        my $matches = marker_enzymes( $sites, $seqs );
+        say join "\t", $chr, $pos, join ",", @$matches if @$matches;
+    }
+}
 
 sub restriction_enzymes {
     return {
@@ -67,11 +73,23 @@ sub import_snps {
 }
 
 sub get_sequences {
-    my ( $id1, $id2 ) = @_;
+    my ( $fa, $chr, $pos, $snps, $id1, $id2 ) = @_;
+
+    my $flank = 10;
+    my $start = $pos - $flank;
+    my $end   = $pos + $flank;
+
+    my $cmd = "samtools faidx $fa $chr:$start-$end";
+    my ( $fa_id, $seq ) = `$cmd`;
+    chomp $seq;
+
+    my $pre_snp = substr $seq, 0, $flank;
+    my $post_snp = substr $seq, -$flank;
+
     return {
-        $id1 => 'cttctctagaggctttctcgcgaataagcGAATTCacgtgaagcgtcgatagccttcgat',
-        $id2 => 'cttctctagaggctttctcgcgaataagcGAtTTCacgtgaagcgtcgatagccttcgat',
-    }
+        $id1 => $pre_snp . $$snps{$chr}{$pos}{$id1} . $post_snp,
+        $id2 => $pre_snp . $$snps{$chr}{$pos}{$id2} . $post_snp,
+    };
 }
 
 sub marker_enzymes {
