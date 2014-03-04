@@ -10,7 +10,7 @@ use autodie;
 use feature 'say';
 use Getopt::Long;
 
-my $current_version = '0.0.0';
+my $current_version = '0.1.0';
 
 my ( $id1, $id2, $fa, $region, $outdir ) = cli_options($current_version);
 my @snp_files = @ARGV;
