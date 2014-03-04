@@ -16,6 +16,9 @@ my $id2 = 'mutant';
 my $enzymes = restriction_enzymes();
 my $sites   = restriction_sites($enzymes);
 my $seqs    = get_sequences( $id1, $id2 );
+my $matches = marker_enzymes( $sites, $seqs );
+
+say $_ for @$matches;
 
 sub restriction_enzymes {
     return {
@@ -46,4 +49,21 @@ sub get_sequences {
         $id2 => 'cttctctagaggctttctcgcgaataagcGAtTTCacgtgaagcgtcgatagccttcgat',
     }
 }
+
+sub marker_enzymes {
+    my ( $sites, $seqs ) = @_;
+
+    my %diffs;
+    for my $site ( keys $sites ) {
+        my $count = 0;
+        $count += $$seqs{$id1} =~ /$site/ig;
+        $count -= $$seqs{$id2} =~ /$site/ig;
+        $diffs{$site} = $count;
+    }
+
+    my @matching_sites = grep { $diffs{$_} > 0 } keys %diffs;
+    my @matching_enzymes;
+    push @matching_enzymes, @{$$sites{$_}} for @matching_sites;
+
+    return \@matching_enzymes;
 }
