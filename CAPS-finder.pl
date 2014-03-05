@@ -125,11 +125,10 @@ sub find_caps_markers {
 
     my %caps;
     for my $chr ( sort keys $snps ) {
-        my $chr_seq = get_chr_seq( $fa, $chr );
+        my ( $chr_seq1, $chr_seq2 )
+            = get_chr_seq( $fa, $chr, $snps, $id1, $id2 );
         for my $pos ( sort { $a <=> $b } keys $$snps{$chr} ) {
-            my $seqs
-                = get_sequences( \$chr_seq, $chr, $pos, $snps, $id1, $id2,
-                $flank );
+            my $seqs = get_sequences( \$chr_seq1, \$chr_seq2, $pos, $flank );
             my $matches = marker_enzymes( $sites, $seqs, $flank );
             if (@$matches) {
                 $caps{$chr}{$pos}{enzymes} = join ",", @$matches;
@@ -142,37 +141,33 @@ sub find_caps_markers {
 }
 
 sub get_chr_seq {
-    my ( $fa, $chr ) = @_;
+    my ( $fa, $chr, $snps, $id1, $id2 ) = @_;
 
     my $cmd = "samtools faidx $fa $chr";
     my ( $fa_id, @seq ) = `$cmd`;
     chomp @seq;
 
     die "Problem getting sequences for $chr.\n" unless @seq;
-    return join "", @seq;
+    my $seq1 = join "", @seq;
+    $seq1 =~ tr/A-Z/a-z/;
+    my $seq2 = $seq1;
+
+    for my $pos ( sort { $a <=> $b } keys $$snps{$chr} ) {
+        substr $seq1, $pos - 1, 1, $$snps{$chr}{$pos}{$id1};
+        substr $seq2, $pos - 1, 1, $$snps{$chr}{$pos}{$id2};
+    }
+
+    return $seq1, $seq2;
 }
 
 sub get_sequences {
-    my ( $chr_seq, $chr, $pos, $snps, $id1, $id2, $flank ) = @_;
+    my ( $chr_seq1, $chr_seq2, $pos, $flank ) = @_;
 
     my $offset = $pos - ( $flank + 1 );
     my $length = 2 * $flank + 1;
 
-    my $seq = substr $$chr_seq, $offset, $length;
-    $seq =~ tr/A-Z/a-z/;
-    my $seq1 = $seq;
-    my $seq2 = $seq;
-
-    my @adjacent_snps = grep { $_ >= $offset && $_ <= ( $offset + $length ) }
-        keys $$snps{$chr};
-    for (@adjacent_snps) {
-        my $adj_offset = $_ - $offset - 1;
-        substr $seq1, $adj_offset, 1, $$snps{$chr}{$_}{$id1};
-        substr $seq2, $adj_offset, 1, $$snps{$chr}{$_}{$id2};
-    }
-
-    my $pre_snp = substr $seq, 0, $flank;
-    my $post_snp = substr $seq, -$flank;
+    my $seq1 = substr $$chr_seq1, $offset, $length;
+    my $seq2 = substr $$chr_seq2, $offset, $length;
 
     return {
         $id1 => $seq1,
