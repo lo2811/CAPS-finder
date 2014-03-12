@@ -10,18 +10,24 @@ use autodie;
 use feature 'say';
 use Getopt::Long;
 use File::Path 'make_path';
+use Log::Reproducible;
+reproduce();
 
 # TODO: Find non-palindromic sites
 # TODO: Find sites for enzymes with ambiguous bases
+# TODO: Replace flank length with value related to min fragment length diff resolvable on gel
+# TODO: Output restriction sites (next to enzyme names or in summary of CAPS marker enzymes)
+# TODO: [longer term]/[maybe] Incorporate primer design
 
-my $current_version = '0.2.0';
+my $current_version = '0.3.0';
 
-my ( $id1, $id2, $fa, $region, $outdir ) = cli_options($current_version);
+my ( $id1, $id2, $fa, $region, $outdir, $flank )
+    = cli_options($current_version);
 my @snp_files = @ARGV;
 my $enzymes = restriction_enzymes();
 my $sites   = restriction_sites($enzymes);
 my $snps    = import_snps( \@snp_files, $id1, $id2, $region );
-my $caps    = find_caps_markers( $snps, $sites, $id1, $id2, $fa );
+my $caps    = find_caps_markers( $snps, $sites, $id1, $id2, $fa, $flank );
 make_path($outdir);
 output_caps_markers( $caps, $outdir, $id1, $id2, $region );
 exit;
@@ -31,12 +37,14 @@ sub cli_options {
     my ( $id1, $id2, $fa, $help, $version );
     my $region  = '';
     my $outdir  = '.';
+    my $flank   = 20;
     my $options = GetOptions(
         "id1=s"    => \$id1,
         "id2=s"    => \$id2,
         "fa=s"     => \$fa,
         "region=s" => \$region,
         "outdir=s" => \$outdir,
+        "flank=i"  => \$flank,
         "help"     => \$help,
         "version"  => \$version,
     );
@@ -45,7 +53,7 @@ sub cli_options {
     usage() if $help;
     usage() unless defined $id1 && defined $id2 && defined $fa;
 
-    return $id1, $id2, $fa, $region, $outdir;
+    return $id1, $id2, $fa, $region, $outdir, $flank;
 }
 
 sub usage {
@@ -62,10 +70,10 @@ OPTIONS
   -v, --version               Print version number
   --id1          GENOTYPE     ID for genotype 1
   --id1          GENOTYPE     ID for genotype 2
-  -f, --fa       FASTA        Path to FASTA reference file
+  --fa           FASTA        Path to FASTA reference file
   -r, --region   CHR:POS-POS  Chromosome and/or region of interest
-  -o, --outdir   DIR          Directory to save output file
-                               (Default is current directory)
+  -o, --outdir   [.]          Directory to save output file
+  --flank        [10]         Length of SNP-flanking sequence to use
 
 EOF
 }
@@ -104,8 +112,8 @@ sub import_snps {
             next if /(?:INS)|(?:del)/;
             my ( $chr, $pos, $ref, $alt, $alt_geno ) = split /\t/;
             next if defined $roi_chr && $chr ne $roi_chr;
-            next if defined $roi_start && $pos < $roi_start;
-            next if defined $roi_end   && $pos > $roi_end;
+            next if $roi_start       && $pos < $roi_start;
+            next if $roi_end         && $pos > $roi_end;
 
             my $ref_geno = $alt_geno eq $id2 ? $id1 : $id2;
             $snps{$chr}{$pos}{$ref_geno} = $ref;
@@ -118,15 +126,15 @@ sub import_snps {
 }
 
 sub find_caps_markers {
-    my ( $snps, $sites, $id1, $id2, $fa ) = @_;
+    my ( $snps, $sites, $id1, $id2, $fa, $flank ) = @_;
 
     my %caps;
     for my $chr ( sort keys $snps ) {
-        my $chr_seq = get_chr_seq( $fa, $chr );
+        my ( $chr_seq1, $chr_seq2 )
+            = get_chr_seq( $fa, $chr, $snps, $id1, $id2 );
         for my $pos ( sort { $a <=> $b } keys $$snps{$chr} ) {
-            my $seqs
-                = get_sequences( \$chr_seq, $chr, $pos, $snps, $id1, $id2 );
-            my $matches = marker_enzymes( $sites, $seqs );
+            my $seqs = get_sequences( \$chr_seq1, \$chr_seq2, $pos, $flank );
+            my $matches = marker_enzymes( $sites, $seqs, $flank );
             if (@$matches) {
                 $caps{$chr}{$pos}{enzymes} = join ",", @$matches;
                 $caps{$chr}{$pos}{seqs} = $seqs;
@@ -138,42 +146,52 @@ sub find_caps_markers {
 }
 
 sub get_chr_seq {
-    my ( $fa, $chr ) = @_;
+    my ( $fa, $chr, $snps, $id1, $id2 ) = @_;
 
     my $cmd = "samtools faidx $fa $chr";
     my ( $fa_id, @seq ) = `$cmd`;
     chomp @seq;
 
     die "Problem getting sequences for $chr.\n" unless @seq;
-    return join "", @seq;
+    my $seq1 = join "", @seq;
+    $seq1 =~ tr/A-Z/a-z/;
+    my $seq2 = $seq1;
+
+    for my $pos ( sort { $a <=> $b } keys $$snps{$chr} ) {
+        substr $seq1, $pos - 1, 1, $$snps{$chr}{$pos}{$id1};
+        substr $seq2, $pos - 1, 1, $$snps{$chr}{$pos}{$id2};
+    }
+
+    return $seq1, $seq2;
 }
 
 sub get_sequences {
-    my ( $chr_seq, $chr, $pos, $snps, $id1, $id2 ) = @_;
+    my ( $chr_seq1, $chr_seq2, $pos, $flank ) = @_;
 
-    my $flank  = 10;
     my $offset = $pos - ( $flank + 1 );
     my $length = 2 * $flank + 1;
 
-    my $seq = substr $$chr_seq, $offset, $length;
-    $seq =~ tr/A-Z/a-z/;
-    my $pre_snp = substr $seq, 0, $flank;
-    my $post_snp = substr $seq, -$flank;
+    my $seq1 = substr $$chr_seq1, $offset, $length;
+    my $seq2 = substr $$chr_seq2, $offset, $length;
 
     return {
-        $id1 => $pre_snp . $$snps{$chr}{$pos}{$id1} . $post_snp,
-        $id2 => $pre_snp . $$snps{$chr}{$pos}{$id2} . $post_snp,
+        $id1 => $seq1,
+        $id2 => $seq2,
     };
 }
 
 sub marker_enzymes {
-    my ( $sites, $seqs ) = @_;
+    my ( $sites, $seqs, $flank ) = @_;
 
     my %diffs;
     for my $site ( keys $sites ) {
+
+        my $max = $flank;
+        my $min = $max - ( 1 + length $site );
+        next if $$seqs{$id1} =~ /$site/i && $$seqs{$id2} =~ /$site/i;
         my $count = 0;
-        $count += $$seqs{$id1} =~ /$site/ig;
-        $count -= $$seqs{$id2} =~ /$site/ig;
+        $count += $$seqs{$id1} =~ /^[ACGT]{$min,$max}$site[ACGT]{$min,$max}$/i;
+        $count -= $$seqs{$id2} =~ /^[ACGT]{$min,$max}$site[ACGT]{$min,$max}$/i;
         $diffs{$site} = $count;
     }
 
