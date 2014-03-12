@@ -10,6 +10,8 @@ use autodie;
 use feature 'say';
 use Getopt::Long;
 use File::Path 'make_path';
+use Log::Reproducible;
+reproduce();
 
 # TODO: Find non-palindromic sites
 # TODO: Find sites for enzymes with ambiguous bases
