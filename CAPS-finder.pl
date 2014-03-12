@@ -19,7 +19,7 @@ reproduce();
 # TODO: Output restriction sites (next to enzyme names or in summary of CAPS marker enzymes)
 # TODO: [longer term]/[maybe] Incorporate primer design
 
-my $current_version = '0.2.0';
+my $current_version = '0.3.0';
 
 my ( $id1, $id2, $fa, $region, $outdir, $flank )
     = cli_options($current_version);
