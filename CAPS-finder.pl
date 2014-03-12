@@ -21,13 +21,14 @@ reproduce();
 
 my $current_version = '0.3.0';
 
-my ( $id1, $id2, $fa, $region, $outdir, $flank )
+my ( $id1, $id2, $fa, $region, $outdir, $flank, $multi_cut )
     = cli_options($current_version);
 my @snp_files = @ARGV;
-my $enzymes = restriction_enzymes();
-my $sites   = restriction_sites($enzymes);
-my $snps    = import_snps( \@snp_files, $id1, $id2, $region );
-my $caps    = find_caps_markers( $snps, $sites, $id1, $id2, $fa, $flank );
+my $enzymes   = restriction_enzymes();
+my $sites     = restriction_sites($enzymes);
+my $snps      = import_snps( \@snp_files, $id1, $id2, $region );
+my $caps
+    = find_caps_markers( $snps, $sites, $id1, $id2, $fa, $flank, $multi_cut );
 make_path($outdir);
 output_caps_markers( $caps, $outdir, $id1, $id2, $region );
 exit;
@@ -39,21 +40,22 @@ sub cli_options {
     my $outdir  = '.';
     my $flank   = 20;
     my $options = GetOptions(
-        "id1=s"    => \$id1,
-        "id2=s"    => \$id2,
-        "fa=s"     => \$fa,
-        "region=s" => \$region,
-        "outdir=s" => \$outdir,
-        "flank=i"  => \$flank,
-        "help"     => \$help,
-        "version"  => \$version,
+        "id1=s"     => \$id1,
+        "id2=s"     => \$id2,
+        "fa=s"      => \$fa,
+        "region=s"  => \$region,
+        "outdir=s"  => \$outdir,
+        "flank=i"   => \$flank,
+        "multi_cut" => \$multi_cut,
+        "help"      => \$help,
+        "version"   => \$version,
     );
 
     die "$0 $current_version\n" if $version;
     usage() if $help;
     usage() unless defined $id1 && defined $id2 && defined $fa;
 
-    return $id1, $id2, $fa, $region, $outdir, $flank;
+    return $id1, $id2, $fa, $region, $outdir, $flank, $multi_cut;
 }
 
 sub usage {
@@ -66,14 +68,15 @@ DESCRIPTION
   Find sites of potential CAPS markers.
 
 OPTIONS
-  -h, --help                  Print this help message
-  -v, --version               Print version number
-  --id1          GENOTYPE     ID for genotype 1
-  --id1          GENOTYPE     ID for genotype 2
-  --fa           FASTA        Path to FASTA reference file
-  -r, --region   CHR:POS-POS  Chromosome and/or region of interest
-  -o, --outdir   [.]          Directory to save output file
-  --flank        [10]         Length of SNP-flanking sequence to use
+  -h, --help                   Print this help message
+  -v, --version                Print version number
+  --id1           GENOTYPE     ID for genotype 1
+  --id1           GENOTYPE     ID for genotype 2
+  --fa            FASTA        Path to FASTA reference file
+  -r, --region    CHR:POS-POS  Chromosome and/or region of interest
+  -o, --outdir    [.]          Directory to save output file
+  --flank         [10]         Length of SNP-flanking sequence to use
+  -m, --multi_cut              Allow multiple cuts per amplicon
 
 EOF
 }
@@ -126,7 +129,7 @@ sub import_snps {
 }
 
 sub find_caps_markers {
-    my ( $snps, $sites, $id1, $id2, $fa, $flank ) = @_;
+    my ( $snps, $sites, $id1, $id2, $fa, $flank, $multi_cut ) = @_;
 
     my %caps;
     for my $chr ( sort keys $snps ) {
@@ -134,7 +137,7 @@ sub find_caps_markers {
             = get_chr_seq( $fa, $chr, $snps, $id1, $id2 );
         for my $pos ( sort { $a <=> $b } keys $$snps{$chr} ) {
             my $seqs = get_sequences( \$chr_seq1, \$chr_seq2, $pos, $flank );
-            my $matches = marker_enzymes( $sites, $seqs, $flank );
+            my $matches = marker_enzymes( $sites, $seqs, $flank, $multi_cut );
             if (@$matches) {
                 $caps{$chr}{$pos}{enzymes} = join ",", @$matches;
                 $caps{$chr}{$pos}{seqs} = $seqs;
@@ -181,14 +184,17 @@ sub get_sequences {
 }
 
 sub marker_enzymes {
-    my ( $sites, $seqs, $flank ) = @_;
+    my ( $sites, $seqs, $flank, $multi_cut ) = @_;
 
     my %diffs;
     for my $site ( keys $sites ) {
 
         my $max = $flank;
         my $min = $max - ( 1 + length $site );
-        next if $$seqs{$id1} =~ /$site/i && $$seqs{$id2} =~ /$site/i;
+        next
+            if $multi_cut
+            && $$seqs{$id1} =~ /$site/i
+            && $$seqs{$id2} =~ /$site/i;
         my $count = 0;
         $count += $$seqs{$id1} =~ /^[ACGT]{$min,$max}$site[ACGT]{$min,$max}$/i;
         $count -= $$seqs{$id2} =~ /^[ACGT]{$min,$max}$site[ACGT]{$min,$max}$/i;
