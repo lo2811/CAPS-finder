@@ -110,8 +110,8 @@ sub import_snps {
             next if /(?:INS)|(?:del)/;
             my ( $chr, $pos, $ref, $alt, $alt_geno ) = split /\t/;
             next if defined $roi_chr && $chr ne $roi_chr;
-            next if defined $roi_start && $pos < $roi_start;
-            next if defined $roi_end   && $pos > $roi_end;
+            next if $roi_start       && $pos < $roi_start;
+            next if $roi_end         && $pos > $roi_end;
 
             my $ref_geno = $alt_geno eq $id2 ? $id1 : $id2;
             $snps{$chr}{$pos}{$ref_geno} = $ref;
