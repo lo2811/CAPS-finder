@@ -139,7 +139,7 @@ sub find_caps_markers {
             my $seqs = get_sequences( \$chr_seq1, \$chr_seq2, $pos, $flank );
             my $matches = marker_enzymes( $sites, $seqs, $flank, $multi_cut );
             if (@$matches) {
-                $caps{$chr}{$pos}{enzymes} = join ",", @$matches;
+                $caps{$chr}{$pos}{enzymes} = $matches;
                 $caps{$chr}{$pos}{seqs} = $seqs;
             }
         }
@@ -219,9 +219,9 @@ sub output_caps_markers {
     say $caps_fh join "\t", 'chr', 'pos', 'enzymes', $id1, $id2;
     for my $chr ( sort keys $caps ) {
         for my $pos ( sort { $a <=> $b } keys $$caps{$chr} ) {
-            my $enzymes = $$caps{$chr}{$pos}{enzymes};
-            my $seq1 = $$caps{$chr}{$pos}{seqs}{$id1};
-            my $seq2 = $$caps{$chr}{$pos}{seqs}{$id2};
+            my $enzymes = join ",", @{ $$caps{$chr}{$pos}{enzymes} };
+            my $seq1    = $$caps{$chr}{$pos}{seqs}{$id1};
+            my $seq2    = $$caps{$chr}{$pos}{seqs}{$id2};
             say $caps_fh join "\t", $chr, $pos, $enzymes, $seq1, $seq2;
         }
     }
