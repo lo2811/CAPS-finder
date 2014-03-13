@@ -21,7 +21,6 @@ reproduce();
 # TODO: Deal with $primer3_path and primer3 parameters
 # TODO: Validate primer3 version
 # TODO: Add verbose option
-# TODO: Run all calls to primer3 in one step (when parsing results, use '=' as field input seperator '$/')
 
 my $current_version = '0.3.1';
 
@@ -220,23 +219,33 @@ sub marker_enzymes {
 sub design_primers {
     my ( $caps, $id1, $id2, $flank, $primer3_path ) = @_;
 
-    my %primers;
+    my $primer3_parameters
+        = get_primer3_parameters( $caps, $id1, $id2, $flank );
+    my $primer3_out = run_primer3( $primer3_parameters, $primer3_path );
+    my $primers = parse_primer3_results( $primer3_out, $caps );
+
+    return $primers;
+}
+
+sub get_primer3_parameters {
+    my ( $caps, $id1, $id2, $flank ) = @_;
+    my $size_range
+        = "90-120 120-150 150-250 100-300 301-400 401-500 501-600 601-700 701-850 851-1000";
+
+    my $primer3_parameters;
     for my $chr ( sort keys $caps ) {
         for my $pos ( sort { $a <=> $b } keys $$caps{$chr} ) {
             my $seq1 = $$caps{$chr}{$pos}{seqs}{$id1};
             my $seq2 = $$caps{$chr}{$pos}{seqs}{$id2};
-
             my $excluded = exclude_snps( $seq1, $flank );
-            my $results = primer3( $chr, $pos, $seq1, $flank, $excluded,
-                $primer3_path );
-            my ($success) = $results =~ /PRIMER_PAIR_NUM_RETURNED=(\d+)/;
-            next if $success == 0;
 
-            parse_primer3( $results, \%primers, $chr, $pos, $id1, $id2,
-                $seq1, $seq2 );
+            $primer3_parameters
+                .= primer3_input_record( $chr, $pos, $seq1, $flank, $excluded,
+                $size_range, $primer3_path );
         }
     }
-    return \%primers;
+    chomp $primer3_parameters;
+    return $primer3_parameters;
 }
 
 sub exclude_snps {
@@ -252,14 +261,13 @@ sub exclude_snps {
     return $excluded;
 }
 
-sub primer3 {
-    my ( $chr, $pos, $seq1, $flank, $excluded, $primer3_path ) = @_;
-    my $size_range
-        = "90-120 120-150 150-250 100-300 301-400 401-500 501-600 601-700 701-850 851-1000";
+sub primer3_input_record {
+    my ( $chr, $pos, $seq, $flank, $excluded, $size_range, $primer3_path )
+        = @_;
 
-    my $primer3_in = <<EOF;
+    return <<EOF;
 SEQUENCE_ID=${chr}_$pos
-SEQUENCE_TEMPLATE=$seq1
+SEQUENCE_TEMPLATE=$seq
 PRIMER_TASK=generic
 SEQUENCE_TARGET=$flank,1
 SEQUENCE_EXCLUDED_REGION=$excluded
@@ -268,37 +276,58 @@ PRIMER_NUM_RETURN=1
 PRIMER_THERMODYNAMIC_PARAMETERS_PATH=$primer3_path/primer3_config/
 =
 EOF
-    chomp $primer3_in;
-
-    my $results = `echo '$primer3_in' | $primer3_path/primer3_core`;
-    return $results;
 }
 
-sub parse_primer3 {
-    my ( $results, $primers, $chr, $pos, $id1, $id2, $seq1, $seq2 ) = @_;
+sub run_primer3 {
+    my ( $primer3_parameters, $primer3_path ) = @_;
 
-    my ($lt_primer)    = $results =~ /PRIMER_LEFT_0_SEQUENCE=([a-z]+)/;
-    my ($rt_primer)    = $results =~ /PRIMER_RIGHT_0_SEQUENCE=([a-z]+)/;
-    my ($lt_primer_tm) = $results =~ /PRIMER_LEFT_0_TM=(\d+\.\d+)/;
-    my ($rt_primer_tm) = $results =~ /PRIMER_RIGHT_0_TM=(\d+\.\d+)/;
-    my ($pcr_size)     = $results =~ /PRIMER_PAIR_0_PRODUCT_SIZE=(\d+)/;
-    my ( $lt_pos, $lt_len ) = $results =~ /PRIMER_LEFT_0=(\d+),(\d+)/;
-    my ( $rt_pos, $rt_len ) = $results =~ /PRIMER_RIGHT_0=(\d+),(\d+)/;
+    my $primer3_out = `echo '$primer3_parameters' | $primer3_path/primer3_core`;
+    return $primer3_out;
+}
 
-    my $amplicon1 = substr $seq1, $lt_pos, $pcr_size;
-    my $amplicon2 = substr $seq2, $lt_pos, $pcr_size;
+sub parse_primer3_results {
+    my ( $primer3_out, $caps ) = @_;
 
-    $$primers{$chr}{$pos} = {
-        'lt_primer'    => $lt_primer,
-        'rt_primer'    => $rt_primer,
-        'lt_primer_tm' => $lt_primer_tm,
-        'rt_primer_tm' => $rt_primer_tm,
-        'pcr_size'     => $pcr_size,
-        'amplicon'     => {
-            $id1 => $amplicon1,
-            $id2 => $amplicon2,
-        }
-    };
+    my $old_input_rec_sep = $/;
+    $/ = '^=$';
+    my @primer3_results = split /\n=\n/, $primer3_out;
+    $/ = $old_input_rec_sep;
+
+    my %primers;
+    for my $result (@primer3_results) {
+
+        my ($success) = $result =~ /PRIMER_PAIR_NUM_RETURNED=(\d+)/;
+        next if $success == 0;
+
+        my ($lt_primer)    = $result =~ /PRIMER_LEFT_0_SEQUENCE=([a-z]+)/;
+        my ($rt_primer)    = $result =~ /PRIMER_RIGHT_0_SEQUENCE=([a-z]+)/;
+        my ($lt_primer_tm) = $result =~ /PRIMER_LEFT_0_TM=(\d+\.\d+)/;
+        my ($rt_primer_tm) = $result =~ /PRIMER_RIGHT_0_TM=(\d+\.\d+)/;
+        my ($pcr_size)     = $result =~ /PRIMER_PAIR_0_PRODUCT_SIZE=(\d+)/;
+        my ( $lt_pos, $lt_len ) = $result =~ /PRIMER_LEFT_0=(\d+),(\d+)/;
+        my ( $rt_pos, $rt_len ) = $result =~ /PRIMER_RIGHT_0=(\d+),(\d+)/;
+
+        my ( $chr, $pos ) = $result =~ /SEQUENCE_ID=(.+)_(\d+)/;
+        my $seq1      = $$caps{$chr}{$pos}{seqs}{$id1};
+        my $seq2      = $$caps{$chr}{$pos}{seqs}{$id2};
+        my $amplicon1 = substr $seq1, $lt_pos, $pcr_size;
+        my $amplicon2 = substr $seq2, $lt_pos, $pcr_size;
+
+        $primers{$chr}{$pos} = {
+            'lt_primer'    => $lt_primer,
+            'rt_primer'    => $rt_primer,
+            'lt_primer_tm' => $lt_primer_tm,
+            'rt_primer_tm' => $rt_primer_tm,
+            'pcr_size'     => $pcr_size,
+            'amplicon'     => {
+                $id1 => $amplicon1,
+                $id2 => $amplicon2,
+            }
+        };
+
+    }
+
+    return \%primers;
 }
 
 sub digest_amplicons {
