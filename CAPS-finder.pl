@@ -18,6 +18,8 @@ reproduce();
 # TODO: Replace flank length with value related to min fragment length diff resolvable on gel
 # TODO: Output restriction sites (next to enzyme names or in summary of CAPS marker enzymes)
 # TODO: [longer term]/[maybe] Incorporate primer design
+# TODO: Deal with $primer3_path and primer3 parameters
+# TODO: Validate primer3 version
 
 my $current_version = '0.3.1';
 
