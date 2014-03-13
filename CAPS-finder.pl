@@ -20,6 +20,8 @@ reproduce();
 # TODO: [longer term]/[maybe] Incorporate primer design
 # TODO: Deal with $primer3_path and primer3 parameters
 # TODO: Validate primer3 version
+# TODO: Add verbose option
+# TODO: Run all calls to primer3 in one step (when parsing results, use '=' as field input seperator '$/')
 
 my $current_version = '0.3.1';
 
