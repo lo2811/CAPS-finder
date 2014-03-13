@@ -37,6 +37,7 @@ my $primers = design_primers( $caps, $id1, $id2, $flank, $primer3_path );
 digest_amplicons( $caps, $primers, $enzymes, $id1, $id2 );
 make_path($outdir);
 output_caps_markers( $caps, $outdir, $id1, $id2, $region );
+output_primers( $primers, $outdir, $enzymes, $id1, $id2, $region );
 exit;
 
 sub cli_options {
@@ -346,6 +347,53 @@ sub output_caps_markers {
         }
     }
     close $caps_fh;
+}
+
+sub output_primers {
+    my ( $primers, $outdir, $enzymes, $id1, $id2, $region ) = @_;
+
+    $region =~ s/:/_/;
+    my $output = "$outdir/primers.$id1-$id2";
+    $output .= ".$region" if $region;
+
+    open my $primers_fh, ">", $output;
+    say $primers_fh join "\t", 'chr', 'pos', 'digest(s)',
+        'fwd_primer,rev_primer',           'fwd_Tm,rev_Tm',
+        "${id1}_amplicon,${id2}_amplicon", 'length';
+    for my $chr ( keys $primers ) {
+        for my $pos ( sort { $a <=> $b } keys $$primers{$chr} ) {
+
+            my $pcr_size    = $$primers{$chr}{$pos}{pcr_size};
+
+            my $lt_primer      = $$primers{$chr}{$pos}{lt_primer};
+            my $lt_primer_tm   = $$primers{$chr}{$pos}{lt_primer_tm};
+            my $rt_primer      = $$primers{$chr}{$pos}{rt_primer};
+            my $rt_primer_tm   = $$primers{$chr}{$pos}{rt_primer_tm};
+            my $primer_info    = "$lt_primer,$rt_primer";
+            my $primer_tm_info = "$lt_primer_tm,$rt_primer_tm";
+
+            my $amplicon1 = $$primers{$chr}{$pos}{amplicon}{$id1};
+            my $amplicon2 = $$primers{$chr}{$pos}{amplicon}{$id2};
+            my $amplicons = "$amplicon1,$amplicon2";
+
+            my @enzyme_info;
+            for my $enzyme ( sort keys $$primers{$chr}{$pos}{digest_lengths} ) {
+                my $site = $$enzymes{$enzyme};
+
+                my $frags1 = join "+",
+                    @{ $$primers{$chr}{$pos}{digest_lengths}{$enzyme}{$id1} };
+                my $frags2 = join "+",
+                    @{ $$primers{$chr}{$pos}{digest_lengths}{$enzyme}{$id2} };
+
+                push @enzyme_info, "$enzyme($site):$frags1,$frags2";
+            }
+            my $enzyme_summary = join "|", @enzyme_info;
+
+            say $primers_fh join "\t", $chr, $pos, $enzyme_summary,
+                $primer_info, $primer_tm_info, $amplicons, $pcr_size;
+        }
+    }
+    close $primers_fh;
 }
 
 __DATA__
