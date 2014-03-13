@@ -32,6 +32,7 @@ my $snps      = import_snps( \@snp_files, $id1, $id2, $region );
 my $caps
     = find_caps_markers( $snps, $sites, $id1, $id2, $fa, $flank, $multi_cut );
 my $primers = design_primers( $caps, $id1, $id2, $flank, $primer3_path );
+digest_amplicons( $caps, $primers, $enzymes, $id1, $id2 );
 make_path($outdir);
 output_caps_markers( $caps, $outdir, $id1, $id2, $region );
 exit;
@@ -277,6 +278,36 @@ sub get_snp_positions {
         push @positions, $-[0];
     }
     return @positions;
+}
+
+sub digest_amplicons {
+    my ( $caps, $primers, $enzymes, $id1, $id2 ) = @_;
+
+    for my $chr ( sort keys $primers ) {
+        for my $pos ( sort { $a <=> $b } keys $$primers{$chr} ) {
+            my $amplicon1 = $$primers{$chr}{$pos}{amplicon}{$id1};
+            my $amplicon2 = $$primers{$chr}{$pos}{amplicon}{$id2};
+
+            for my $enzyme ( @{ $$caps{$chr}{$pos}{enzymes} } ) {
+                my $site = $$enzymes{$enzyme};
+
+                $$primers{$chr}{$pos}{digest_lengths}{$enzyme}{$id1}
+                    = get_fragment_lengths( $amplicon1, $site );
+                $$primers{$chr}{$pos}{digest_lengths}{$enzyme}{$id2}
+                    = get_fragment_lengths( $amplicon2, $site );
+            }
+        }
+    }
+}
+
+sub get_fragment_lengths {
+    my ( $seq, $site ) = @_;
+
+    my ( $lt_site, $rt_site ) = split /\//, $site;
+    my @fragments = sort { $b <=> $a }
+        map { length $_ } split /(?<=$lt_site)(?=$rt_site)/i, $seq;
+
+    return \@fragments;
 }
 
 sub output_caps_markers {
