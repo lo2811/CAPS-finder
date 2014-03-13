@@ -34,9 +34,9 @@ my $sites     = restriction_sites($enzymes);
 my $snps      = import_snps( \@snp_files, $id1, $id2, $region );
 my $caps
     = find_caps_markers( $snps, $sites, $id1, $id2, $fa, $flank, $multi_cut );
+make_path($outdir);
 my $primers = design_primers( $caps, $id1, $id2, $flank, $primer3_path );
 digest_amplicons( $caps, $primers, $enzymes, $id1, $id2 );
-make_path($outdir);
 output_caps_markers( $caps, $outdir, $id1, $id2, $region );
 output_primers( $primers, $outdir, $enzymes, $id1, $id2, $region );
 exit;
@@ -219,16 +219,17 @@ sub marker_enzymes {
 sub design_primers {
     my ( $caps, $id1, $id2, $flank, $primer3_path ) = @_;
 
-    my $primer3_parameters
-        = get_primer3_parameters( $caps, $id1, $id2, $flank );
-    my $primer3_out = run_primer3( $primer3_parameters, $primer3_path );
+    my $primer3_parameters_path
+        = write_primer3_parameters( $caps, $id1, $id2, $flank, $region,
+        $outdir );
+    my $primer3_out = run_primer3( $primer3_parameters_path, $primer3_path );
     my $primers = parse_primer3_results( $primer3_out, $caps );
 
     return $primers;
 }
 
-sub get_primer3_parameters {
-    my ( $caps, $id1, $id2, $flank ) = @_;
+sub write_primer3_parameters {
+    my ( $caps, $id1, $id2, $flank, $region, $outdir ) = @_;
     my $size_range
         = "90-120 120-150 150-250 100-300 301-400 401-500 501-600 601-700 701-850 851-1000";
 
@@ -245,7 +246,16 @@ sub get_primer3_parameters {
         }
     }
     chomp $primer3_parameters;
-    return $primer3_parameters;
+
+    $region =~ s/:/_/;
+    my $output = "$outdir/primer3_parameters.$id1-$id2";
+    $output .= ".$region" if $region;
+
+    open my $primer3_fh, ">", $output;
+    print $primer3_fh $primer3_parameters;
+    close $primer3_fh;
+
+    return $output;
 }
 
 sub exclude_snps {
@@ -279,9 +289,9 @@ EOF
 }
 
 sub run_primer3 {
-    my ( $primer3_parameters, $primer3_path ) = @_;
+    my ( $primer3_parameters_path, $primer3_path ) = @_;
 
-    my $primer3_out = `echo '$primer3_parameters' | $primer3_path/primer3_core`;
+    my $primer3_out = `$primer3_path/primer3_core $primer3_parameters_path`;
     return $primer3_out;
 }
 
@@ -388,8 +398,8 @@ sub output_primers {
     $output .= ".$region" if $region;
 
     open my $primers_fh, ">", $output;
-    say $primers_fh join "\t", 'chr', 'pos', 'digest(s)',
-        'fwd_primer,rev_primer',           'fwd_Tm,rev_Tm',
+    say $primers_fh join "\t",
+        'chr', 'pos', 'digest(s)', 'fwd_primer,rev_primer', 'fwd_Tm,rev_Tm',
         "${id1}_amplicon,${id2}_amplicon", 'length';
 
     for my $chr ( sort keys $primers ) {
