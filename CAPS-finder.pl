@@ -199,7 +199,7 @@ sub marker_enzymes {
         my $max = $flank;
         my $min = $max - ( 1 + length $site );
         next
-            if $multi_cut
+            if !$multi_cut
             && $$seqs{$id1} =~ /$site/i
             && $$seqs{$id2} =~ /$site/i;
         my $count = 0;
