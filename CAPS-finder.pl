@@ -360,7 +360,8 @@ sub output_primers {
     say $primers_fh join "\t", 'chr', 'pos', 'digest(s)',
         'fwd_primer,rev_primer',           'fwd_Tm,rev_Tm',
         "${id1}_amplicon,${id2}_amplicon", 'length';
-    for my $chr ( keys $primers ) {
+
+    for my $chr ( sort keys $primers ) {
         for my $pos ( sort { $a <=> $b } keys $$primers{$chr} ) {
 
             my $pcr_size    = $$primers{$chr}{$pos}{pcr_size};
