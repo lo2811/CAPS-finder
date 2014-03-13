@@ -38,7 +38,7 @@ sub cli_options {
     my ( $id1, $id2, $fa, $help, $version );
     my $region  = '';
     my $outdir  = '.';
-    my $flank   = 20;
+    my $flank   = 100;
     my $options = GetOptions(
         "id1=s"     => \$id1,
         "id2=s"     => \$id2,
