@@ -240,6 +240,9 @@ EOF
 
             my $results = `echo '$primer3_in' | $primer3_path/primer3_core`;
 
+            my ($success) = $results =~ /PRIMER_PAIR_NUM_RETURNED=(\d+)/;
+            next if $success == 0;
+
             my ($lt_primer)    = $results =~ /PRIMER_LEFT_0_SEQUENCE=([a-z]+)/;
             my ($rt_primer)    = $results =~ /PRIMER_RIGHT_0_SEQUENCE=([a-z]+)/;
             my ($lt_primer_tm) = $results =~ /PRIMER_LEFT_0_TM=(\d+\.\d+)/;
