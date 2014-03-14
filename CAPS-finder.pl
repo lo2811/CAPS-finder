@@ -18,6 +18,8 @@ reproduce();
 # TODO: Replace flank length with value related to min fragment length diff resolvable on gel
 # TODO: Deal with $primer3_path and primer3 parameters
 # TODO: Validate primer3 version
+# TODO: Filter 'duplicate' CAPS markers (multiple SNPs that hit same restriction site)
+# TODO: Check that primers don't span INDELs
 
 my $current_version = '0.3.1';
 
