@@ -230,7 +230,9 @@ sub design_primers {
         = write_primer3_parameters( $caps, $id1, $id2, $flank, $region,
         $outdir );
     my $primer3_out = run_primer3( $primer3_parameters_path, $primer3_path );
-    my $primers = parse_primer3_results( $primer3_out, $caps );
+    my ( $primers, $marker_count )
+        = parse_primer3_results( $primer3_out, $caps );
+    say "Found primers for $marker_count CAPS markers";
 
     return $primers;
 }
@@ -311,10 +313,12 @@ sub parse_primer3_results {
     $/ = $old_input_rec_sep;
 
     my %primers;
+    my $marker_count = 0;
     for my $result (@primer3_results) {
 
         my ($success) = $result =~ /PRIMER_PAIR_NUM_RETURNED=(\d+)/;
         next if $success == 0;
+        $marker_count++;
 
         my ($lt_primer)    = $result =~ /PRIMER_LEFT_0_SEQUENCE=([a-z]+)/;
         my ($rt_primer)    = $result =~ /PRIMER_RIGHT_0_SEQUENCE=([a-z]+)/;
@@ -344,7 +348,7 @@ sub parse_primer3_results {
 
     }
 
-    return \%primers;
+    return \%primers, $marker_count;
 }
 
 sub digest_amplicons {
