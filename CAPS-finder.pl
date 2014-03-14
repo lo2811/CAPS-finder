@@ -217,7 +217,7 @@ sub marker_enzymes {
         $diffs{$site} = $count;
     }
 
-    my @matching_sites = grep { $diffs{$_} > 0 } keys %diffs;
+    my @matching_sites = grep { $diffs{$_} != 0 } keys %diffs;
     my @matching_enzymes;
     push @matching_enzymes, @{$$sites{$_}} for @matching_sites;
 
