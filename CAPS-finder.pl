@@ -16,8 +16,6 @@ reproduce();
 # TODO: Find non-palindromic sites
 # TODO: Find sites for enzymes with ambiguous bases
 # TODO: Replace flank length with value related to min fragment length diff resolvable on gel
-# TODO: Output restriction sites (next to enzyme names or in summary of CAPS marker enzymes)
-# TODO: [longer term]/[maybe] Incorporate primer design
 # TODO: Deal with $primer3_path and primer3 parameters
 # TODO: Validate primer3 version
 
