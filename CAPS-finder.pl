@@ -124,7 +124,7 @@ sub import_snps {
     my ( $roi_chr, $roi_start, $roi_end )
         = $region =~ /^([^:]+):?(\d*)-?(\d*)/;
 
-    say join " ", "Importing SNPs from", scalar @$snp_files, "files"
+    say join " ", "Importing SNPs from", scalar @$snp_files, "file(s)"
         if $verbose;
 
     my %snps;
@@ -241,7 +241,7 @@ sub design_primers {
     my $primer3_out = run_primer3( $primer3_parameters_path, $primer3_path );
     my ( $primers, $marker_count )
         = parse_primer3_results( $primer3_out, $caps );
-    say "Found primers for $marker_count CAPS markers";
+    say "Found primers for $marker_count CAPS markers" if $verbose;
 
     return $primers;
 }
@@ -416,7 +416,7 @@ sub output_primers {
     my $output = "$outdir/primers.$id1-$id2";
     $output .= ".$region" if $region;
 
-    say "Writing CAPS markers to file: $output";
+    say "Writing CAPS markers to file: $output" if $verbose;
     open my $primers_fh, ">", $output;
     say $primers_fh join "\t",
         'chr', 'pos', 'digest(s)', 'fwd_primer,rev_primer', 'fwd_Tm,rev_Tm',
