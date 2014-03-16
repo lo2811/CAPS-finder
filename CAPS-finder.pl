@@ -68,6 +68,7 @@ sub cli_options {
 
     die "$0 $current_version\n" if $version;
     usage() if $help;
+    usage() unless $options;
     usage() unless defined $id1 && defined $id2 && defined $fa;
 
     return $id1, $id2, $fa, $region, $outdir, $flank, $multi_cut, $verbose;
