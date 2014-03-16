@@ -20,10 +20,14 @@ reproduce();
 # TODO: Validate primer3 version
 # TODO: Filter 'duplicate' CAPS markers (multiple SNPs that hit same restriction site)
 # TODO: Check that primers don't span INDELs
+# TODO: Customize primer size_range on CLI
 
 my $current_version = '0.3.1';
 
 my $primer3_path = "/Users/mfc/Downloads/release-2.3.6";
+my $size_range
+    = "90-120 120-150 150-250 100-300 301-400 401-500 501-600 601-700 701-850 851-1000";
+    # = "450-550 400-600";
 
 my ( $id1, $id2, $fa, $region, $outdir, $flank, $multi_cut, $verbose )
     = cli_options($current_version);
@@ -36,7 +40,8 @@ my $caps
     $verbose );
 make_path($outdir);
 my $primers
-    = design_primers( $caps, $id1, $id2, $flank, $primer3_path, $verbose );
+    = design_primers( $caps, $id1, $id2, $flank, $size_range, $primer3_path,
+    $verbose );
 digest_amplicons( $caps, $primers, $enzymes, $id1, $id2, $verbose );
 output_caps_markers( $caps, $outdir, $id1, $id2, $region );
 output_primers( $primers, $outdir, $enzymes, $id1, $id2, $region, $verbose );
@@ -225,12 +230,13 @@ sub marker_enzymes {
 }
 
 sub design_primers {
-    my ( $caps, $id1, $id2, $flank, $primer3_path, $verbose ) = @_;
+    my ( $caps, $id1, $id2, $flank, $size_range, $primer3_path, $verbose )
+        = @_;
 
     say "Designing primers" if $verbose;
     my $primer3_parameters_path
-        = write_primer3_parameters( $caps, $id1, $id2, $flank, $region,
-        $outdir );
+        = write_primer3_parameters( $caps, $id1, $id2, $flank, $size_range,
+        $region, $outdir );
     my $primer3_out = run_primer3( $primer3_parameters_path, $primer3_path );
     my ( $primers, $marker_count )
         = parse_primer3_results( $primer3_out, $caps );
@@ -240,9 +246,7 @@ sub design_primers {
 }
 
 sub write_primer3_parameters {
-    my ( $caps, $id1, $id2, $flank, $region, $outdir ) = @_;
-    my $size_range
-        = "90-120 120-150 150-250 100-300 301-400 401-500 501-600 601-700 701-850 851-1000";
+    my ( $caps, $id1, $id2, $flank, $size_range, $region, $outdir ) = @_;
 
     my $primer3_parameters;
     for my $chr ( sort keys $caps ) {
