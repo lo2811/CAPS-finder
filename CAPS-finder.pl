@@ -22,7 +22,7 @@ reproduce();
 # TODO: Check that primers don't span INDELs
 # TODO: Customize primer size_range on CLI
 
-my $current_version = '0.3.1';
+my $current_version = '0.4.0';
 
 my $primer3_path = "/Users/mfc/Downloads/release-2.3.6";
 my $size_range
