@@ -1,3 +1,5 @@
 *.fa
 *.fai
 polyDB.*
+out*/
+repro-archive/
