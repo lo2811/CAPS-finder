@@ -29,22 +29,22 @@ my $size_range
     = "90-120 120-150 150-250 100-300 301-400 401-500 501-600 601-700 701-850 851-1000";
     # = "450-550 400-600";
 
-my ( $id1, $id2, $fa, $region, $outdir, $flank, $multi_cut, $verbose )
+my ( $id1, $id2, $fa, $region, $outdir, $flank, $multi_cut, $silent )
     = cli_options($current_version);
 my @snp_files = @ARGV;
 my $enzymes   = restriction_enzymes();
 my $sites     = restriction_sites($enzymes);
-my $snps      = import_snps( \@snp_files, $id1, $id2, $region, $verbose );
+my $snps      = import_snps( \@snp_files, $id1, $id2, $region, $silent );
 my $caps
     = find_caps_markers( $snps, $sites, $id1, $id2, $fa, $flank, $multi_cut,
-    $verbose );
+    $silent );
 make_path($outdir);
 my $primers
     = design_primers( $caps, $id1, $id2, $flank, $size_range, $primer3_path,
-    $verbose );
-digest_amplicons( $caps, $primers, $enzymes, $id1, $id2, $verbose );
+    $silent );
+digest_amplicons( $caps, $primers, $enzymes, $id1, $id2, $silent );
 output_caps_markers( $caps, $outdir, $id1, $id2, $region );
-output_primers( $primers, $outdir, $enzymes, $id1, $id2, $region, $verbose );
+output_primers( $primers, $outdir, $enzymes, $id1, $id2, $region, $silent );
 exit;
 
 sub cli_options {
@@ -61,7 +61,7 @@ sub cli_options {
         "outdir=s"  => \$outdir,
         "flank=i"   => \$flank,
         "multi_cut" => \$multi_cut,
-        "verbose"   => \$verbose,
+        "silent"    => \$silent,
         "help"      => \$help,
         "version"   => \$version,
     );
@@ -71,7 +71,7 @@ sub cli_options {
     usage() unless $options;
     usage() unless defined $id1 && defined $id2 && defined $fa;
 
-    return $id1, $id2, $fa, $region, $outdir, $flank, $multi_cut, $verbose;
+    return $id1, $id2, $fa, $region, $outdir, $flank, $multi_cut, $silent;
 }
 
 sub usage {
@@ -85,7 +85,7 @@ DESCRIPTION
 
 OPTIONS
   -h, --help                   Print this help message
-  --version                    Print version number
+  -v, --version                Print version number
   --id1           GENOTYPE     ID for genotype 1
   --id1           GENOTYPE     ID for genotype 2
   --fa            FASTA        Path to FASTA reference file
@@ -93,7 +93,7 @@ OPTIONS
   -o, --outdir    [.]          Directory to save output file
   --flank         [10]         Length of SNP-flanking sequence to use
   -m, --multi_cut              Allow multiple cuts per amplicon
-  --verbose                    Verbose mode
+  -s, --silent                 Silent/Non-Verbose mode
 
 EOF
 }
@@ -120,12 +120,12 @@ sub restriction_sites {
 }
 
 sub import_snps {
-    my ( $snp_files, $id1, $id2, $region, $verbose ) = @_;
+    my ( $snp_files, $id1, $id2, $region, $silent ) = @_;
     my ( $roi_chr, $roi_start, $roi_end )
         = $region =~ /^([^:]+):?(\d*)-?(\d*)/;
 
     say join " ", "Importing SNPs from", scalar @$snp_files, "file(s)"
-        if $verbose;
+        unless $silent;
 
     my %snps;
     for my $file (@$snp_files) {
@@ -149,12 +149,12 @@ sub import_snps {
 }
 
 sub find_caps_markers {
-    my ( $snps, $sites, $id1, $id2, $fa, $flank, $multi_cut, $verbose ) = @_;
+    my ( $snps, $sites, $id1, $id2, $fa, $flank, $multi_cut, $silent ) = @_;
 
-    say "Finding CAPS markers on chromosome:" if $verbose;
+    say "Finding CAPS markers on chromosome:" unless $silent;
     my %caps;
     for my $chr ( sort keys $snps ) {
-        say "  $chr" if $verbose;
+        say "  $chr" unless $silent;
         my ( $chr_seq1, $chr_seq2 )
             = get_chr_seq( $fa, $chr, $snps, $id1, $id2 );
         for my $pos ( sort { $a <=> $b } keys $$snps{$chr} ) {
@@ -231,17 +231,17 @@ sub marker_enzymes {
 }
 
 sub design_primers {
-    my ( $caps, $id1, $id2, $flank, $size_range, $primer3_path, $verbose )
+    my ( $caps, $id1, $id2, $flank, $size_range, $primer3_path, $silent )
         = @_;
 
-    say "Designing primers" if $verbose;
+    say "Designing primers" unless $silent;
     my $primer3_parameters_path
         = write_primer3_parameters( $caps, $id1, $id2, $flank, $size_range,
         $region, $outdir );
     my $primer3_out = run_primer3( $primer3_parameters_path, $primer3_path );
     my ( $primers, $marker_count )
         = parse_primer3_results( $primer3_out, $caps );
-    say "Found primers for $marker_count CAPS markers" if $verbose;
+    say "Found primers for $marker_count CAPS markers" unless $silent;
 
     return $primers;
 }
@@ -359,9 +359,9 @@ sub parse_primer3_results {
 }
 
 sub digest_amplicons {
-    my ( $caps, $primers, $enzymes, $id1, $id2, $verbose ) = @_;
+    my ( $caps, $primers, $enzymes, $id1, $id2, $silent ) = @_;
 
-    say "Performing virtual digests" if $verbose;
+    say "Performing virtual digests" unless $silent;
     for my $chr ( sort keys $primers ) {
         for my $pos ( sort { $a <=> $b } keys $$primers{$chr} ) {
             my $amplicon1 = $$primers{$chr}{$pos}{amplicon}{$id1};
@@ -416,7 +416,7 @@ sub output_primers {
     my $output = "$outdir/primers.$id1-$id2";
     $output .= ".$region" if $region;
 
-    say "Writing CAPS markers to file: $output" if $verbose;
+    say "Writing CAPS markers to file: $output" unless $silent;
     open my $primers_fh, ">", $output;
     say $primers_fh join "\t",
         'chr', 'pos', 'digest(s)', 'fwd_primer,rev_primer', 'fwd_Tm,rev_Tm',
