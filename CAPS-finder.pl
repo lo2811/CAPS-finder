@@ -19,7 +19,6 @@ reproduce();
 # TODO: Deal with $primer3_path and primer3 parameters
 # TODO: Validate primer3 version
 # TODO: Filter 'duplicate' CAPS markers (multiple SNPs that hit same restriction site)
-# TODO: Check that primers don't span INDELs
 # TODO: Customize primer size_range on CLI
 
 my $current_version = '0.4.0';
@@ -132,11 +131,16 @@ sub import_snps {
         open my $snp_fh, "<", $file;
         <$snp_fh>;
         while (<$snp_fh>) {
-            next if /(?:INS)|(?:del)/;
             my ( $chr, $pos, $ref, $alt, $alt_geno ) = split /\t/;
             next if defined $roi_chr && $chr ne $roi_chr;
             next if $roi_start       && $pos < $roi_start;
             next if $roi_end         && $pos > $roi_end;
+
+            if ( $ref eq 'INS' || $alt eq 'del' ) {
+                $snps{$chr}{$pos}{$id1} = 'N';
+                $snps{$chr}{$pos}{$id2} = 'N';
+                next;
+            }
 
             my $ref_geno = $alt_geno eq $id2 ? $id1 : $id2;
             $snps{$chr}{$pos}{$ref_geno} = $ref;
@@ -219,8 +223,8 @@ sub marker_enzymes {
             && $$seqs{$id2} =~ /$site/i;
         next if $$seqs{$id1} =~ /n/;
         my $count = 0;
-        $count += $$seqs{$id1} =~ /^[ACGT]{$min,$max}$site[ACGT]{$min,$max}$/i;
-        $count -= $$seqs{$id2} =~ /^[ACGT]{$min,$max}$site[ACGT]{$min,$max}$/i;
+        $count += $$seqs{$id1} =~ /^[ACGTN]{$min,$max}$site[ACGTN]{$min,$max}$/i;
+        $count -= $$seqs{$id2} =~ /^[ACGTN]{$min,$max}$site[ACGTN]{$min,$max}$/i;
         $diffs{$site} = $count;
     }
 
@@ -279,7 +283,7 @@ sub exclude_snps {
     my ( $seq1, $flank ) = @_;
 
     my @snp_positions;
-    while ( $seq1 =~ /[ACGT]/g ) {    # Only SNPs are upper-case
+    while ( $seq1 =~ /[ACGTN]/g ) {    # Only SNPs/INDELs(Ns) are upper-case
         push @snp_positions, $-[0];
     }
 
