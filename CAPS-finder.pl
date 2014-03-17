@@ -166,7 +166,7 @@ sub find_caps_markers {
             my $matches = marker_enzymes( $sites, $seqs, $flank, $multi_cut );
             if (@$matches) {
                 $caps{$chr}{$pos}{enzymes} = $matches;
-                $caps{$chr}{$pos}{seqs} = $seqs;
+                $caps{$chr}{$pos}{seqs}    = $seqs;
             }
         }
     }
@@ -200,18 +200,17 @@ sub get_sequences {
     my $offset = $pos - ( $flank + 1 );
     my $length = 2 * $flank + 1;
 
-    my $seq1 = substr $$chr_seq1, $offset, $length;
-    my $seq2 = substr $$chr_seq2, $offset, $length;
-
     return {
-        $id1 => $seq1,
-        $id2 => $seq2,
+        $id1 => substr( $$chr_seq1, $offset, $length ),
+        $id2 => substr( $$chr_seq2, $offset, $length ),
     };
 }
 
 sub marker_enzymes {
     my ( $sites, $seqs, $flank, $multi_cut ) = @_;
 
+    my $seq1 = $$seqs{$id1};
+    my $seq2 = $$seqs{$id2};
     my %diffs;
     for my $site ( keys $sites ) {
 
@@ -219,18 +218,18 @@ sub marker_enzymes {
         my $min = $max - ( 1 + length $site );
         next
             if !$multi_cut
-            && $$seqs{$id1} =~ /$site/i
-            && $$seqs{$id2} =~ /$site/i;
-        next if $$seqs{$id1} =~ /n/;
+            && $seq1 =~ /$site/i
+            && $seq2 =~ /$site/i;
+        next if $seq1 =~ /n/;   # Skip regions where reference base is unknown
         my $count = 0;
-        $count += $$seqs{$id1} =~ /^[ACGTN]{$min,$max}$site[ACGTN]{$min,$max}$/i;
-        $count -= $$seqs{$id2} =~ /^[ACGTN]{$min,$max}$site[ACGTN]{$min,$max}$/i;
+        $count += $seq1 =~ /^[ACGTN]{$min,$max}$site[ACGTN]{$min,$max}$/i;
+        $count -= $seq2 =~ /^[ACGTN]{$min,$max}$site[ACGTN]{$min,$max}$/i;
         $diffs{$site} = $count;
     }
 
     my @matching_sites = grep { $diffs{$_} != 0 } keys %diffs;
     my @matching_enzymes;
-    push @matching_enzymes, @{$$sites{$_}} for @matching_sites;
+    push @matching_enzymes, @{ $$sites{$_} } for @matching_sites;
 
     return \@matching_enzymes;
 }
@@ -430,18 +429,16 @@ sub output_primers {
     for my $chr ( sort keys $primers ) {
         for my $pos ( sort { $a <=> $b } keys $$primers{$chr} ) {
 
-            my $pcr_size    = $$primers{$chr}{$pos}{pcr_size};
-
+            my $pcr_size       = $$primers{$chr}{$pos}{pcr_size};
             my $lt_primer      = $$primers{$chr}{$pos}{lt_primer};
             my $lt_primer_tm   = $$primers{$chr}{$pos}{lt_primer_tm};
             my $rt_primer      = $$primers{$chr}{$pos}{rt_primer};
             my $rt_primer_tm   = $$primers{$chr}{$pos}{rt_primer_tm};
             my $primer_info    = "$lt_primer,$rt_primer";
             my $primer_tm_info = "$lt_primer_tm,$rt_primer_tm";
-
-            my $amplicon1 = $$primers{$chr}{$pos}{amplicon}{$id1};
-            my $amplicon2 = $$primers{$chr}{$pos}{amplicon}{$id2};
-            my $amplicons = "$amplicon1,$amplicon2";
+            my $amplicon1      = $$primers{$chr}{$pos}{amplicon}{$id1};
+            my $amplicon2      = $$primers{$chr}{$pos}{amplicon}{$id2};
+            my $amplicons      = "$amplicon1,$amplicon2";
 
             my @enzyme_info;
             for my $enzyme ( sort keys $$primers{$chr}{$pos}{digest_lengths} ) {
