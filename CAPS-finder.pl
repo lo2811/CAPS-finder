@@ -217,6 +217,7 @@ sub marker_enzymes {
             if !$multi_cut
             && $$seqs{$id1} =~ /$site/i
             && $$seqs{$id2} =~ /$site/i;
+        next if $$seqs{$id1} =~ /n/;
         my $count = 0;
         $count += $$seqs{$id1} =~ /^[ACGT]{$min,$max}$site[ACGT]{$min,$max}$/i;
         $count -= $$seqs{$id2} =~ /^[ACGT]{$min,$max}$site[ACGT]{$min,$max}$/i;
