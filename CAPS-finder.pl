@@ -303,11 +303,12 @@ sub write_primer3_parameters {
         for my $pos ( sort { $a <=> $b } keys $$caps{$chr} ) {
             my $seq1 = $$caps{$chr}{$pos}{seqs}{$id1};
             my $seq2 = $$caps{$chr}{$pos}{seqs}{$id2};
-            my $excluded_snps = exclude_snps( $seq1, $flank );
-            my $excluded_inserts
-                = exclude_inserts( $inserts, $chr, $pos, $flank );
-            my $excluded = join " ", $excluded_snps, $excluded_inserts;
-            $excluded =~ s/(?:(?:^\s+)|(?:\s+$))//g;
+
+            my $excluded_positions = exclude_snps( $seq1, $flank );
+            exclude_inserts( $excluded_positions,
+                $inserts, $chr, $pos, $flank );
+            my $excluded = join " ", map {"$_,$$excluded_positions{$_}"}
+                sort { $a <=> $b } keys $excluded_positions;
 
             $primer3_parameters
                 .= primer3_input_record( $chr, $pos, $seq1, $flank, $excluded,
@@ -335,13 +336,14 @@ sub exclude_snps {
         push @snp_positions, $-[0];
     }
 
-    my $excluded = join " ",
-        map {"$_,1"} grep { $_ != $flank } @snp_positions;
-    return $excluded;
+    my %excluded_positions;
+    $excluded_positions{$_} = 1 for grep { $_ != $flank } @snp_positions;
+
+    return \%excluded_positions;
 }
 
 sub exclude_inserts {
-    my ( $inserts, $chr, $pos, $flank ) = @_;
+    my ( $excluded_positions, $inserts, $chr, $pos, $flank ) = @_;
 
     my $start = $pos - $flank;
     my $end   = $start + 2 * $flank;
@@ -352,9 +354,7 @@ sub exclude_inserts {
             if exists $$inserts{$chr}{ $_ - 1 };
     }
 
-    my $excluded = join " ", map {"$_,0"} @insert_positions;
-
-    return $excluded;
+    $$excluded_positions{$_} = 0 for @insert_positions;
 }
 
 sub primer3_input_record {
