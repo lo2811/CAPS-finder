@@ -288,7 +288,7 @@ sub design_primers {
         $size_range, $region, $outdir );
     my $primer3_out = run_primer3( $primer3_parameters_path, $primer3_path );
     my ( $primers, $marker_count )
-        = parse_primer3_results( $primer3_out, $caps );
+        = parse_primer3_results( $primer3_out, $caps, $inserts, $flank );
     say "Found primers for $marker_count CAPS markers" unless $silent;
 
     return $primers;
@@ -382,7 +382,7 @@ sub run_primer3 {
 }
 
 sub parse_primer3_results {
-    my ( $primer3_out, $caps ) = @_;
+    my ( $primer3_out, $caps, $inserts, $flank ) = @_;
 
     my $old_input_rec_sep = $/;
     $/ = '^=$';
@@ -406,10 +406,14 @@ sub parse_primer3_results {
         my ( $rt_pos, $rt_len ) = $result =~ /PRIMER_RIGHT_0=(\d+),(\d+)/;
 
         my ( $chr, $pos ) = $result =~ /SEQUENCE_ID=(.+)_(\d+)/;
-        my $seq1      = $$caps{$chr}{$pos}{seqs}{$id1};
-        my $seq2      = $$caps{$chr}{$pos}{seqs}{$id2};
-        my $amplicon1 = substr $seq1, $lt_pos, $pcr_size;
-        my $amplicon2 = substr $seq2, $lt_pos, $pcr_size;
+        my $seq1 = $$caps{$chr}{$pos}{seqs}{$id1};
+        my $seq2 = $$caps{$chr}{$pos}{seqs}{$id2};
+        my $amplicon1
+            = get_amplicon( $seq1, $lt_pos, $pcr_size, $chr, $pos, $inserts,
+            $flank );
+        my $amplicon2
+            = get_amplicon( $seq2, $lt_pos, $pcr_size, $chr, $pos, $inserts,
+            $flank );
 
         $primers{$chr}{$pos} = {
             'lt_primer'    => $lt_primer,
@@ -426,6 +430,23 @@ sub parse_primer3_results {
     }
 
     return \%primers, $marker_count;
+}
+
+sub get_amplicon {
+    my ( $seq, $lt_pos, $pcr_size, $chr, $pos, $inserts, $flank ) = @_;
+
+    my $amplicon = substr $seq, $lt_pos, $pcr_size;
+    my $start    = $pos - $flank + $lt_pos;
+    my $end      = $start + $pcr_size - 1;
+
+    for ( sort { $b <=> $a } ( $start + 1 ) .. $end ) {
+        if ( exists $$inserts{$chr}{ $_ - 1 } ) {
+            my $offset = $_ - $start;
+            substr $amplicon, $offset, 0, "X";
+        }
+    }
+
+    return $amplicon;
 }
 
 sub digest_amplicons {
