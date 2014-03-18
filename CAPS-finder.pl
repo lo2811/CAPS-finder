@@ -41,7 +41,7 @@ my $caps
     $multi_cut, $silent );
 make_path($outdir);
 my $primers
-    = design_primers( $caps, $id1, $id2, $flank, $size_range, $primer3_path,
+    = design_primers( $caps, $inserts, $id1, $id2, $flank, $size_range, $primer3_path,
     $silent );
 digest_amplicons( $caps, $primers, $enzymes, $id1, $id2, $silent );
 output_caps_markers( $caps, $outdir, $id1, $id2, $region );
@@ -278,13 +278,14 @@ sub is_insert {
 }
 
 sub design_primers {
-    my ( $caps, $id1, $id2, $flank, $size_range, $primer3_path, $silent )
+    my ( $caps, $inserts, $id1, $id2, $flank, $size_range, $primer3_path,
+        $silent )
         = @_;
 
     say "Designing primers" unless $silent;
     my $primer3_parameters_path
-        = write_primer3_parameters( $caps, $id1, $id2, $flank, $size_range,
-        $region, $outdir );
+        = write_primer3_parameters( $caps, $inserts, $id1, $id2, $flank,
+        $size_range, $region, $outdir );
     my $primer3_out = run_primer3( $primer3_parameters_path, $primer3_path );
     my ( $primers, $marker_count )
         = parse_primer3_results( $primer3_out, $caps );
@@ -294,14 +295,19 @@ sub design_primers {
 }
 
 sub write_primer3_parameters {
-    my ( $caps, $id1, $id2, $flank, $size_range, $region, $outdir ) = @_;
+    my ( $caps, $inserts, $id1, $id2, $flank, $size_range, $region, $outdir )
+        = @_;
 
     my $primer3_parameters;
     for my $chr ( sort keys $caps ) {
         for my $pos ( sort { $a <=> $b } keys $$caps{$chr} ) {
             my $seq1 = $$caps{$chr}{$pos}{seqs}{$id1};
             my $seq2 = $$caps{$chr}{$pos}{seqs}{$id2};
-            my $excluded = exclude_snps( $seq1, $flank );
+            my $excluded_snps = exclude_snps( $seq1, $flank );
+            my $excluded_inserts
+                = exclude_inserts( $inserts, $chr, $pos, $flank );
+            my $excluded = join " ", $excluded_snps, $excluded_inserts;
+            $excluded =~ s/(?:(?:^\s+)|(?:\s+$))//g;
 
             $primer3_parameters
                 .= primer3_input_record( $chr, $pos, $seq1, $flank, $excluded,
@@ -331,6 +337,23 @@ sub exclude_snps {
 
     my $excluded = join " ",
         map {"$_,1"} grep { $_ != $flank } @snp_positions;
+    return $excluded;
+}
+
+sub exclude_inserts {
+    my ( $inserts, $chr, $pos, $flank ) = @_;
+
+    my $start = $pos - $flank;
+    my $end   = $start + 2 * $flank;
+
+    my @insert_positions;
+    for ( $start .. $end ) {
+        push @insert_positions, ( $_ - $pos + $flank )
+            if exists $$inserts{$chr}{ $_ - 1 };
+    }
+
+    my $excluded = join " ", map {"$_,0"} @insert_positions;
+
     return $excluded;
 }
 
