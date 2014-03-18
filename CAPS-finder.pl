@@ -10,6 +10,7 @@ use autodie;
 use feature 'say';
 use Getopt::Long;
 use File::Path 'make_path';
+use List::MoreUtils 'any';
 use Log::Reproducible;
 reproduce();
 
@@ -33,10 +34,11 @@ my ( $id1, $id2, $fa, $region, $outdir, $flank, $multi_cut, $silent )
 my @snp_files = @ARGV;
 my $enzymes   = restriction_enzymes();
 my $sites     = restriction_sites($enzymes);
-my $snps      = import_snps( \@snp_files, $id1, $id2, $region, $silent );
+my ( $snps, $inserts )
+    = import_snps( \@snp_files, $id1, $id2, $region, $silent );
 my $caps
-    = find_caps_markers( $snps, $sites, $id1, $id2, $fa, $flank, $multi_cut,
-    $silent );
+    = find_caps_markers( $snps, $inserts, $sites, $id1, $id2, $fa, $flank,
+    $multi_cut, $silent );
 make_path($outdir);
 my $primers
     = design_primers( $caps, $id1, $id2, $flank, $size_range, $primer3_path,
@@ -127,6 +129,7 @@ sub import_snps {
         unless $silent;
 
     my %snps;
+    my %inserts;
     for my $file (@$snp_files) {
         open my $snp_fh, "<", $file;
         <$snp_fh>;
@@ -136,7 +139,12 @@ sub import_snps {
             next if $roi_start       && $pos < $roi_start;
             next if $roi_end         && $pos > $roi_end;
 
-            if ( $ref eq 'INS' || $alt eq 'del' ) {
+            if ( $ref eq 'INS' ) {
+                $inserts{$chr}{$pos} = 1;
+                next;
+            }
+
+            if ( $alt eq 'del' ) {
                 $snps{$chr}{$pos}{$id1} = 'N';
                 $snps{$chr}{$pos}{$id2} = 'N';
                 next;
@@ -149,11 +157,13 @@ sub import_snps {
         close $snp_fh;
     }
 
-    return \%snps;
+    return \%snps, \%inserts;
 }
 
 sub find_caps_markers {
-    my ( $snps, $sites, $id1, $id2, $fa, $flank, $multi_cut, $silent ) = @_;
+    my ($snps, $inserts, $sites,     $id1, $id2,
+        $fa,   $flank,   $multi_cut, $silent
+    ) = @_;
 
     say "Finding CAPS markers on chromosome:" unless $silent;
     my %caps;
@@ -163,7 +173,7 @@ sub find_caps_markers {
             = get_chr_seq( $fa, $chr, $snps, $id1, $id2 );
         for my $pos ( sort { $a <=> $b } keys $$snps{$chr} ) {
             my $seqs = get_sequences( \$chr_seq1, \$chr_seq2, $pos, $flank );
-            my $matches = marker_enzymes( $sites, $seqs, $flank, $multi_cut );
+            my $matches = marker_enzymes( $sites, $seqs, $chr, $pos, $inserts, $flank, $multi_cut );
             if (@$matches) {
                 $caps{$chr}{$pos}{enzymes} = $matches;
                 $caps{$chr}{$pos}{seqs}    = $seqs;
@@ -207,7 +217,7 @@ sub get_sequences {
 }
 
 sub marker_enzymes {
-    my ( $sites, $seqs, $flank, $multi_cut ) = @_;
+    my ( $sites, $seqs, $chr, $pos, $inserts, $flank, $multi_cut ) = @_;
 
     my $seq1 = $$seqs{$id1};
     my $seq2 = $$seqs{$id2};
@@ -222,8 +232,14 @@ sub marker_enzymes {
             && $seq2 =~ /$site/i;
         next if $seq1 =~ /n/;   # Skip regions where reference base is unknown
         my $count = 0;
-        $count += $seq1 =~ /^[ACGTN]{$min,$max}$site[ACGTN]{$min,$max}$/i;
-        $count -= $seq2 =~ /^[ACGTN]{$min,$max}$site[ACGTN]{$min,$max}$/i;
+        if ( $seq1 =~ /^[ACGTN]{$min,$max}$site(?=[ACGTN]{$min,$max}$)/i ) {
+            next if is_insert( $inserts, $site, $+[0], $chr, $pos, $flank );
+            $count++;
+        }
+        if ( $seq2 =~ /^[ACGTN]{$min,$max}$site(?=[ACGTN]{$min,$max}$)/i ) {
+            next if is_insert( $inserts, $site, $+[0], $chr, $pos, $flank );
+            $count--;
+        }
         $diffs{$site} = $count;
     }
 
@@ -232,6 +248,14 @@ sub marker_enzymes {
     push @matching_enzymes, @{ $$sites{$_} } for @matching_sites;
 
     return \@matching_enzymes;
+}
+
+sub is_insert {
+    my ( $inserts, $site, $match_end, $chr, $pos, $flank ) = @_;
+    my $end   = $match_end - $flank + $pos - 1;
+    my $start = $end + 1 - length $site;
+    return 1
+        if any { exists $$inserts{$chr}{ $_ - 1 } } ( $start + 1 ) .. $end;
 }
 
 sub design_primers {
