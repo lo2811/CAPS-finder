@@ -228,10 +228,23 @@ sub marker_enzymes {
 
         my $max = $flank;
         my $min = $max - ( 1 + length $site );
-        next
-            if !$multi_cut
-            && $seq1 =~ /$site/i
-            && $seq2 =~ /$site/i;
+
+        if ( !$multi_cut ) {
+            my $count1 = 0;
+            my $count2 = 0;
+            while ( $seq1 =~ /$site/ig ) {
+                $count1++
+                    unless is_insert( $inserts, $site, $+[0], $chr, $pos,
+                    $flank );
+            }
+            while ( $seq2 =~ /$site/ig ) {
+                $count2++
+                    unless is_insert( $inserts, $site, $+[0], $chr, $pos,
+                    $flank );
+            }
+            next if $count1 && $count2;
+        }
+
         my $count = 0;
         if ( $seq1 =~ /^[ACGTN]{$min,$max}$site(?=[ACGTN]{$min,$max}$)/i ) {
             next if is_insert( $inserts, $site, $+[0], $chr, $pos, $flank );
