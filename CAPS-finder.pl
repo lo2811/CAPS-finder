@@ -10,6 +10,7 @@ use autodie;
 use feature 'say';
 use Getopt::Long;
 use File::Path 'make_path';
+use List::MoreUtils 'any';
 use Log::Reproducible;
 reproduce();
 
@@ -19,32 +20,33 @@ reproduce();
 # TODO: Deal with $primer3_path and primer3 parameters
 # TODO: Validate primer3 version
 # TODO: Filter 'duplicate' CAPS markers (multiple SNPs that hit same restriction site)
-# TODO: Check that primers don't span INDELs
 # TODO: Customize primer size_range on CLI
+# TODO: Use actual sequences that result from INDELs (splice in INSERT at digest stage? and for deletions, add Ns only to deletion genotype, then during digest s/N//g;)
 
-my $current_version = '0.4.0';
+my $current_version = '0.5.0';
 
 my $primer3_path = "/Users/mfc/Downloads/release-2.3.6";
 my $size_range
     = "90-120 120-150 150-250 100-300 301-400 401-500 501-600 601-700 701-850 851-1000";
     # = "450-550 400-600";
 
-my ( $id1, $id2, $fa, $region, $outdir, $flank, $multi_cut, $verbose )
+my ( $id1, $id2, $fa, $region, $outdir, $flank, $multi_cut, $silent )
     = cli_options($current_version);
 my @snp_files = @ARGV;
 my $enzymes   = restriction_enzymes();
 my $sites     = restriction_sites($enzymes);
-my $snps      = import_snps( \@snp_files, $id1, $id2, $region, $verbose );
+my ( $snps, $inserts )
+    = import_snps( \@snp_files, $id1, $id2, $region, $silent );
 my $caps
-    = find_caps_markers( $snps, $sites, $id1, $id2, $fa, $flank, $multi_cut,
-    $verbose );
+    = find_caps_markers( $snps, $inserts, $sites, $id1, $id2, $fa, $flank,
+    $multi_cut, $silent );
 make_path($outdir);
 my $primers
-    = design_primers( $caps, $id1, $id2, $flank, $size_range, $primer3_path,
-    $verbose );
-digest_amplicons( $caps, $primers, $enzymes, $id1, $id2, $verbose );
+    = design_primers( $caps, $inserts, $id1, $id2, $flank, $size_range,
+    $primer3_path, $silent );
+digest_amplicons( $caps, $primers, $enzymes, $id1, $id2, $silent );
 output_caps_markers( $caps, $outdir, $id1, $id2, $region );
-output_primers( $primers, $outdir, $enzymes, $id1, $id2, $region, $verbose );
+output_primers( $primers, $outdir, $enzymes, $id1, $id2, $region, $silent );
 exit;
 
 sub cli_options {
@@ -61,16 +63,17 @@ sub cli_options {
         "outdir=s"  => \$outdir,
         "flank=i"   => \$flank,
         "multi_cut" => \$multi_cut,
-        "verbose"   => \$verbose,
+        "silent"    => \$silent,
         "help"      => \$help,
         "version"   => \$version,
     );
 
     die "$0 $current_version\n" if $version;
     usage() if $help;
+    usage() unless $options;
     usage() unless defined $id1 && defined $id2 && defined $fa;
 
-    return $id1, $id2, $fa, $region, $outdir, $flank, $multi_cut, $verbose;
+    return $id1, $id2, $fa, $region, $outdir, $flank, $multi_cut, $silent;
 }
 
 sub usage {
@@ -84,7 +87,7 @@ DESCRIPTION
 
 OPTIONS
   -h, --help                   Print this help message
-  --version                    Print version number
+  -v, --version                Print version number
   --id1           GENOTYPE     ID for genotype 1
   --id1           GENOTYPE     ID for genotype 2
   --fa            FASTA        Path to FASTA reference file
@@ -92,7 +95,7 @@ OPTIONS
   -o, --outdir    [.]          Directory to save output file
   --flank         [10]         Length of SNP-flanking sequence to use
   -m, --multi_cut              Allow multiple cuts per amplicon
-  --verbose                    Verbose mode
+  -s, --silent                 Silent/Non-Verbose mode
 
 EOF
 }
@@ -119,23 +122,34 @@ sub restriction_sites {
 }
 
 sub import_snps {
-    my ( $snp_files, $id1, $id2, $region, $verbose ) = @_;
+    my ( $snp_files, $id1, $id2, $region, $silent ) = @_;
     my ( $roi_chr, $roi_start, $roi_end )
         = $region =~ /^([^:]+):?(\d*)-?(\d*)/;
 
-    say join " ", "Importing SNPs from", scalar @$snp_files, "files"
-        if $verbose;
+    say join " ", "Importing SNPs from", scalar @$snp_files, "file(s)"
+        unless $silent;
 
     my %snps;
+    my %inserts;
     for my $file (@$snp_files) {
         open my $snp_fh, "<", $file;
         <$snp_fh>;
         while (<$snp_fh>) {
-            next if /(?:INS)|(?:del)/;
             my ( $chr, $pos, $ref, $alt, $alt_geno ) = split /\t/;
             next if defined $roi_chr && $chr ne $roi_chr;
             next if $roi_start       && $pos < $roi_start;
             next if $roi_end         && $pos > $roi_end;
+
+            if ( $ref eq 'INS' ) {
+                $inserts{$chr}{$pos} = 1;
+                next;
+            }
+
+            if ( $alt eq 'del' ) {
+                $snps{$chr}{$pos}{$id1} = 'N';
+                $snps{$chr}{$pos}{$id2} = 'N';
+                next;
+            }
 
             my $ref_geno = $alt_geno eq $id2 ? $id1 : $id2;
             $snps{$chr}{$pos}{$ref_geno} = $ref;
@@ -144,24 +158,27 @@ sub import_snps {
         close $snp_fh;
     }
 
-    return \%snps;
+    return \%snps, \%inserts;
 }
 
 sub find_caps_markers {
-    my ( $snps, $sites, $id1, $id2, $fa, $flank, $multi_cut, $verbose ) = @_;
+    my ($snps, $inserts, $sites,     $id1, $id2,
+        $fa,   $flank,   $multi_cut, $silent
+    ) = @_;
 
-    say "Finding CAPS markers on chromosome:" if $verbose;
+    say "Finding CAPS markers on chromosome:" unless $silent;
     my %caps;
     for my $chr ( sort keys $snps ) {
-        say "  $chr" if $verbose;
+        say "  $chr" unless $silent;
         my ( $chr_seq1, $chr_seq2 )
             = get_chr_seq( $fa, $chr, $snps, $id1, $id2 );
         for my $pos ( sort { $a <=> $b } keys $$snps{$chr} ) {
             my $seqs = get_sequences( \$chr_seq1, \$chr_seq2, $pos, $flank );
-            my $matches = marker_enzymes( $sites, $seqs, $flank, $multi_cut );
+            my $matches = marker_enzymes( $sites, $seqs, $chr, $pos, $inserts,
+                $flank, $multi_cut );
             if (@$matches) {
                 $caps{$chr}{$pos}{enzymes} = $matches;
-                $caps{$chr}{$pos}{seqs} = $seqs;
+                $caps{$chr}{$pos}{seqs}    = $seqs;
             }
         }
     }
@@ -195,65 +212,105 @@ sub get_sequences {
     my $offset = $pos - ( $flank + 1 );
     my $length = 2 * $flank + 1;
 
-    my $seq1 = substr $$chr_seq1, $offset, $length;
-    my $seq2 = substr $$chr_seq2, $offset, $length;
-
     return {
-        $id1 => $seq1,
-        $id2 => $seq2,
+        $id1 => substr( $$chr_seq1, $offset, $length ),
+        $id2 => substr( $$chr_seq2, $offset, $length ),
     };
 }
 
 sub marker_enzymes {
-    my ( $sites, $seqs, $flank, $multi_cut ) = @_;
+    my ( $sites, $seqs, $chr, $pos, $inserts, $flank, $multi_cut ) = @_;
+
+    my $seq1 = $$seqs{$id1};
+    return [] if $seq1 =~ /n/;  # Skip regions where reference base is unknown
+    my $seq2 = $$seqs{$id2};
 
     my %diffs;
     for my $site ( keys $sites ) {
 
         my $max = $flank;
         my $min = $max - ( 1 + length $site );
+
         next
             if !$multi_cut
-            && $$seqs{$id1} =~ /$site/i
-            && $$seqs{$id2} =~ /$site/i;
+            && is_multi_cut( $seq1, $seq2, $inserts, $site, $chr, $pos );
+
         my $count = 0;
-        $count += $$seqs{$id1} =~ /^[ACGT]{$min,$max}$site[ACGT]{$min,$max}$/i;
-        $count -= $$seqs{$id2} =~ /^[ACGT]{$min,$max}$site[ACGT]{$min,$max}$/i;
+        if ( $seq1 =~ /^[ACGTN]{$min,$max}$site(?=[ACGTN]{$min,$max}$)/i ) {
+            next if is_insert( $inserts, $site, $+[0], $chr, $pos, $flank );
+            $count++;
+        }
+        if ( $seq2 =~ /^[ACGTN]{$min,$max}$site(?=[ACGTN]{$min,$max}$)/i ) {
+            next if is_insert( $inserts, $site, $+[0], $chr, $pos, $flank );
+            $count--;
+        }
         $diffs{$site} = $count;
     }
 
     my @matching_sites = grep { $diffs{$_} != 0 } keys %diffs;
     my @matching_enzymes;
-    push @matching_enzymes, @{$$sites{$_}} for @matching_sites;
+    push @matching_enzymes, @{ $$sites{$_} } for @matching_sites;
 
     return \@matching_enzymes;
 }
 
+sub is_multi_cut {
+    my ( $seq1, $seq2, $inserts, $site, $chr, $pos ) = @_;
+
+    my $count1 = 0;
+    my $count2 = 0;
+    while ( $seq1 =~ /$site/ig ) {
+        $count1++
+            unless is_insert( $inserts, $site, $+[0], $chr, $pos, $flank );
+    }
+    while ( $seq2 =~ /$site/ig ) {
+        $count2++
+            unless is_insert( $inserts, $site, $+[0], $chr, $pos, $flank );
+    }
+
+    return 1 if $count1 && $count2;
+}
+
+sub is_insert {
+    my ( $inserts, $site, $match_end, $chr, $pos, $flank ) = @_;
+    my $end   = $match_end - $flank + $pos - 1;
+    my $start = $end + 1 - length $site;
+    return 1
+        if any { exists $$inserts{$chr}{ $_ - 1 } } ( $start + 1 ) .. $end;
+}
+
 sub design_primers {
-    my ( $caps, $id1, $id2, $flank, $size_range, $primer3_path, $verbose )
+    my ( $caps, $inserts, $id1, $id2, $flank, $size_range, $primer3_path,
+        $silent )
         = @_;
 
-    say "Designing primers" if $verbose;
+    say "Designing primers" unless $silent;
     my $primer3_parameters_path
-        = write_primer3_parameters( $caps, $id1, $id2, $flank, $size_range,
-        $region, $outdir );
+        = write_primer3_parameters( $caps, $inserts, $id1, $id2, $flank,
+        $size_range, $region, $outdir );
     my $primer3_out = run_primer3( $primer3_parameters_path, $primer3_path );
     my ( $primers, $marker_count )
-        = parse_primer3_results( $primer3_out, $caps );
-    say "Found primers for $marker_count CAPS markers";
+        = parse_primer3_results( $primer3_out, $caps, $inserts, $flank );
+    say "Found primers for $marker_count CAPS markers" unless $silent;
 
     return $primers;
 }
 
 sub write_primer3_parameters {
-    my ( $caps, $id1, $id2, $flank, $size_range, $region, $outdir ) = @_;
+    my ( $caps, $inserts, $id1, $id2, $flank, $size_range, $region, $outdir )
+        = @_;
 
     my $primer3_parameters;
     for my $chr ( sort keys $caps ) {
         for my $pos ( sort { $a <=> $b } keys $$caps{$chr} ) {
             my $seq1 = $$caps{$chr}{$pos}{seqs}{$id1};
             my $seq2 = $$caps{$chr}{$pos}{seqs}{$id2};
-            my $excluded = exclude_snps( $seq1, $flank );
+
+            my $excluded_positions = exclude_snps( $seq1, $flank );
+            exclude_inserts( $excluded_positions,
+                $inserts, $chr, $pos, $flank );
+            my $excluded = join " ", map {"$_,$$excluded_positions{$_}"}
+                sort { $a <=> $b } keys $excluded_positions;
 
             $primer3_parameters
                 .= primer3_input_record( $chr, $pos, $seq1, $flank, $excluded,
@@ -277,13 +334,29 @@ sub exclude_snps {
     my ( $seq1, $flank ) = @_;
 
     my @snp_positions;
-    while ( $seq1 =~ /[ACGT]/g ) {    # Only SNPs are upper-case
+    while ( $seq1 =~ /[ACGTN]/g ) {    # Only SNPs/INDELs(Ns) are upper-case
         push @snp_positions, $-[0];
     }
 
-    my $excluded = join " ",
-        map {"$_,1"} grep { $_ != $flank } @snp_positions;
-    return $excluded;
+    my %excluded_positions;
+    $excluded_positions{$_} = 1 for grep { $_ != $flank } @snp_positions;
+
+    return \%excluded_positions;
+}
+
+sub exclude_inserts {
+    my ( $excluded_positions, $inserts, $chr, $pos, $flank ) = @_;
+
+    my $start = $pos - $flank;
+    my $end   = $start + 2 * $flank;
+
+    my @insert_positions;
+    for ( $start .. $end ) {
+        push @insert_positions, ( $_ - $pos + $flank )
+            if exists $$inserts{$chr}{ $_ - 1 };
+    }
+
+    $$excluded_positions{$_} = 0 for @insert_positions;
 }
 
 sub primer3_input_record {
@@ -311,7 +384,7 @@ sub run_primer3 {
 }
 
 sub parse_primer3_results {
-    my ( $primer3_out, $caps ) = @_;
+    my ( $primer3_out, $caps, $inserts, $flank ) = @_;
 
     my $old_input_rec_sep = $/;
     $/ = '^=$';
@@ -335,10 +408,14 @@ sub parse_primer3_results {
         my ( $rt_pos, $rt_len ) = $result =~ /PRIMER_RIGHT_0=(\d+),(\d+)/;
 
         my ( $chr, $pos ) = $result =~ /SEQUENCE_ID=(.+)_(\d+)/;
-        my $seq1      = $$caps{$chr}{$pos}{seqs}{$id1};
-        my $seq2      = $$caps{$chr}{$pos}{seqs}{$id2};
-        my $amplicon1 = substr $seq1, $lt_pos, $pcr_size;
-        my $amplicon2 = substr $seq2, $lt_pos, $pcr_size;
+        my $seq1 = $$caps{$chr}{$pos}{seqs}{$id1};
+        my $seq2 = $$caps{$chr}{$pos}{seqs}{$id2};
+        my $amplicon1
+            = get_amplicon( $seq1, $lt_pos, $pcr_size, $chr, $pos, $inserts,
+            $flank );
+        my $amplicon2
+            = get_amplicon( $seq2, $lt_pos, $pcr_size, $chr, $pos, $inserts,
+            $flank );
 
         $primers{$chr}{$pos} = {
             'lt_primer'    => $lt_primer,
@@ -357,10 +434,27 @@ sub parse_primer3_results {
     return \%primers, $marker_count;
 }
 
-sub digest_amplicons {
-    my ( $caps, $primers, $enzymes, $id1, $id2, $verbose ) = @_;
+sub get_amplicon {
+    my ( $seq, $lt_pos, $pcr_size, $chr, $pos, $inserts, $flank ) = @_;
 
-    say "Performing virtual digests" if $verbose;
+    my $amplicon = substr $seq, $lt_pos, $pcr_size;
+    my $start    = $pos - $flank + $lt_pos;
+    my $end      = $start + $pcr_size - 1;
+
+    for ( sort { $b <=> $a } ( $start + 1 ) .. $end ) {
+        if ( exists $$inserts{$chr}{ $_ - 1 } ) {
+            my $offset = $_ - $start;
+            substr $amplicon, $offset, 0, "X";
+        }
+    }
+
+    return $amplicon;
+}
+
+sub digest_amplicons {
+    my ( $caps, $primers, $enzymes, $id1, $id2, $silent ) = @_;
+
+    say "Performing virtual digests" unless $silent;
     for my $chr ( sort keys $primers ) {
         for my $pos ( sort { $a <=> $b } keys $$primers{$chr} ) {
             my $amplicon1 = $$primers{$chr}{$pos}{amplicon}{$id1};
@@ -415,7 +509,7 @@ sub output_primers {
     my $output = "$outdir/primers.$id1-$id2";
     $output .= ".$region" if $region;
 
-    say "Writing CAPS markers to file: $output";
+    say "Writing CAPS markers to file: $output" unless $silent;
     open my $primers_fh, ">", $output;
     say $primers_fh join "\t",
         'chr', 'pos', 'digest(s)', 'fwd_primer,rev_primer', 'fwd_Tm,rev_Tm',
@@ -424,18 +518,16 @@ sub output_primers {
     for my $chr ( sort keys $primers ) {
         for my $pos ( sort { $a <=> $b } keys $$primers{$chr} ) {
 
-            my $pcr_size    = $$primers{$chr}{$pos}{pcr_size};
-
+            my $pcr_size       = $$primers{$chr}{$pos}{pcr_size};
             my $lt_primer      = $$primers{$chr}{$pos}{lt_primer};
             my $lt_primer_tm   = $$primers{$chr}{$pos}{lt_primer_tm};
             my $rt_primer      = $$primers{$chr}{$pos}{rt_primer};
             my $rt_primer_tm   = $$primers{$chr}{$pos}{rt_primer_tm};
             my $primer_info    = "$lt_primer,$rt_primer";
             my $primer_tm_info = "$lt_primer_tm,$rt_primer_tm";
-
-            my $amplicon1 = $$primers{$chr}{$pos}{amplicon}{$id1};
-            my $amplicon2 = $$primers{$chr}{$pos}{amplicon}{$id2};
-            my $amplicons = "$amplicon1,$amplicon2";
+            my $amplicon1      = $$primers{$chr}{$pos}{amplicon}{$id1};
+            my $amplicon2      = $$primers{$chr}{$pos}{amplicon}{$id2};
+            my $amplicons      = "$amplicon1,$amplicon2";
 
             my @enzyme_info;
             for my $enzyme ( sort keys $$primers{$chr}{$pos}{digest_lengths} ) {
