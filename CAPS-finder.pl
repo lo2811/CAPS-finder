@@ -220,7 +220,9 @@ sub marker_enzymes {
     my ( $sites, $seqs, $chr, $pos, $inserts, $flank, $multi_cut ) = @_;
 
     my $seq1 = $$seqs{$id1};
+    return [] if $seq1 =~ /n/;  # Skip regions where reference base is unknown
     my $seq2 = $$seqs{$id2};
+
     my %diffs;
     for my $site ( keys $sites ) {
 
@@ -230,7 +232,6 @@ sub marker_enzymes {
             if !$multi_cut
             && $seq1 =~ /$site/i
             && $seq2 =~ /$site/i;
-        next if $seq1 =~ /n/;   # Skip regions where reference base is unknown
         my $count = 0;
         if ( $seq1 =~ /^[ACGTN]{$min,$max}$site(?=[ACGTN]{$min,$max}$)/i ) {
             next if is_insert( $inserts, $site, $+[0], $chr, $pos, $flank );
