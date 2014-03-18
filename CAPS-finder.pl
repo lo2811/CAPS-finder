@@ -23,7 +23,7 @@ reproduce();
 # TODO: Customize primer size_range on CLI
 # TODO: Use actual sequences that result from INDELs (splice in INSERT at digest stage? and for deletions, add Ns only to deletion genotype, then during digest s/N//g;)
 
-my $current_version = '0.4.0';
+my $current_version = '0.5.0';
 
 my $primer3_path = "/Users/mfc/Downloads/release-2.3.6";
 my $size_range
