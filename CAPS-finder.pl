@@ -21,6 +21,7 @@ reproduce();
 # TODO: Validate primer3 version
 # TODO: Filter 'duplicate' CAPS markers (multiple SNPs that hit same restriction site)
 # TODO: Customize primer size_range on CLI
+# TODO: Use actual sequences that result from INDELs (splice in INSERT at digest stage? and for deletions, add Ns only to deletion genotype, then during digest s/N//g;)
 
 my $current_version = '0.4.0';
 
@@ -41,8 +42,8 @@ my $caps
     $multi_cut, $silent );
 make_path($outdir);
 my $primers
-    = design_primers( $caps, $inserts, $id1, $id2, $flank, $size_range, $primer3_path,
-    $silent );
+    = design_primers( $caps, $inserts, $id1, $id2, $flank, $size_range,
+    $primer3_path, $silent );
 digest_amplicons( $caps, $primers, $enzymes, $id1, $id2, $silent );
 output_caps_markers( $caps, $outdir, $id1, $id2, $region );
 output_primers( $primers, $outdir, $enzymes, $id1, $id2, $region, $silent );
@@ -173,7 +174,8 @@ sub find_caps_markers {
             = get_chr_seq( $fa, $chr, $snps, $id1, $id2 );
         for my $pos ( sort { $a <=> $b } keys $$snps{$chr} ) {
             my $seqs = get_sequences( \$chr_seq1, \$chr_seq2, $pos, $flank );
-            my $matches = marker_enzymes( $sites, $seqs, $chr, $pos, $inserts, $flank, $multi_cut );
+            my $matches = marker_enzymes( $sites, $seqs, $chr, $pos, $inserts,
+                $flank, $multi_cut );
             if (@$matches) {
                 $caps{$chr}{$pos}{enzymes} = $matches;
                 $caps{$chr}{$pos}{seqs}    = $seqs;
