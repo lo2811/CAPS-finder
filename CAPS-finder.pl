@@ -229,21 +229,9 @@ sub marker_enzymes {
         my $max = $flank;
         my $min = $max - ( 1 + length $site );
 
-        if ( !$multi_cut ) {
-            my $count1 = 0;
-            my $count2 = 0;
-            while ( $seq1 =~ /$site/ig ) {
-                $count1++
-                    unless is_insert( $inserts, $site, $+[0], $chr, $pos,
-                    $flank );
-            }
-            while ( $seq2 =~ /$site/ig ) {
-                $count2++
-                    unless is_insert( $inserts, $site, $+[0], $chr, $pos,
-                    $flank );
-            }
-            next if $count1 && $count2;
-        }
+        next
+            if !$multi_cut
+            && is_multi_cut( $seq1, $seq2, $inserts, $site, $chr, $pos );
 
         my $count = 0;
         if ( $seq1 =~ /^[ACGTN]{$min,$max}$site(?=[ACGTN]{$min,$max}$)/i ) {
@@ -262,6 +250,23 @@ sub marker_enzymes {
     push @matching_enzymes, @{ $$sites{$_} } for @matching_sites;
 
     return \@matching_enzymes;
+}
+
+sub is_multi_cut {
+    my ( $seq1, $seq2, $inserts, $site, $chr, $pos ) = @_;
+
+    my $count1 = 0;
+    my $count2 = 0;
+    while ( $seq1 =~ /$site/ig ) {
+        $count1++
+            unless is_insert( $inserts, $site, $+[0], $chr, $pos, $flank );
+    }
+    while ( $seq2 =~ /$site/ig ) {
+        $count2++
+            unless is_insert( $inserts, $site, $+[0], $chr, $pos, $flank );
+    }
+
+    return 1 if $count1 && $count2;
 }
 
 sub is_insert {
